@@ -1,8 +1,11 @@
 mod adapters;
+mod cache;
 mod cli;
 mod commands;
 mod config;
 mod error;
+mod git;
+mod repository;
 mod template;
 
 use clap::Parser;
@@ -106,12 +109,10 @@ fn run() -> Result<()> {
 
         Commands::Cache(cache_cmd) => match cache_cmd {
             CacheCommands::Update { name, all } => {
-                println!("Cache update command (not yet implemented)");
-                println!("  Name: {:?}", name);
-                println!("  All: {}", all);
+                commands::update_cache(name, all)?;
             }
             CacheCommands::Clear => {
-                println!("Cache clear command (not yet implemented)");
+                commands::clear_cache()?;
             }
         },
 

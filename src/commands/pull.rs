@@ -1,7 +1,7 @@
-use crate::adapters::{detect_tools, ToolAdapter};
+use crate::adapters::detect_tools;
 use crate::error::Result;
+use crate::repository;
 use crate::template::parse_template;
-use std::path::{Path, PathBuf};
 
 /// Pull and apply template configurations
 pub fn pull_template(
@@ -10,15 +10,8 @@ pub fn pull_template(
     dry_run: bool,
     force: bool,
 ) -> Result<()> {
-    // For now, treat source as a local directory path
-    let template_path = PathBuf::from(&template_source);
-
-    if !template_path.exists() {
-        return Err(crate::error::AidotError::InvalidTemplate(format!(
-            "Template path does not exist: {}",
-            template_path.display()
-        )));
-    }
+    // Resolve repository source (local path, Git URL, or registered repo name)
+    let template_path = repository::resolve_repository_source(&template_source)?;
 
     println!("Loading template from {}...", template_path.display());
 

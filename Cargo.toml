@@ -28,3 +28,6 @@ walkdir = "2.4"
 
 # Utilities
 dirs = "5.0"
+
+[dev-dependencies]
+tempfile = "3.10"
