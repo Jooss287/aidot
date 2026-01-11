@@ -1,0 +1,139 @@
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(name = "aidot")]
+#[command(version, about = "AI dotfiles - Manage LLM tool configurations", long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    /// Enable verbose output
+    #[arg(short, long, global = true)]
+    pub verbose: bool,
+
+    /// Suppress output (quiet mode)
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Initialize a new template repository
+    Init {
+        /// Create template from existing LLM configurations
+        #[arg(long)]
+        from_existing: bool,
+
+        /// Interactive template creation
+        #[arg(long)]
+        interactive: bool,
+
+        /// Force overwrite if template already exists
+        #[arg(short, long)]
+        force: bool,
+
+        /// Target directory (default: current directory)
+        #[arg(value_name = "DIR")]
+        path: Option<String>,
+    },
+
+    /// Manage template repositories
+    #[command(subcommand)]
+    Repo(RepoCommands),
+
+    /// Pull and apply template configurations
+    Pull {
+        /// Repository name or URL (if empty, applies all default repositories)
+        #[arg(value_name = "REPO")]
+        repositories: Vec<String>,
+
+        /// Apply to specific tools only (comma-separated: cursor,claude,aider,copilot)
+        #[arg(long, value_delimiter = ',')]
+        tools: Option<Vec<String>>,
+
+        /// Preview changes without applying them
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force overwrite existing files
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Detect installed LLM tools
+    Detect,
+
+    /// Show current configuration status
+    Status,
+
+    /// Manage cache
+    #[command(subcommand)]
+    Cache(CacheCommands),
+
+    /// Show diff between template and current config
+    Diff {
+        /// Repository name
+        #[arg(value_name = "REPO")]
+        repository: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum RepoCommands {
+    /// Add a new template repository
+    Add {
+        /// Repository name
+        #[arg(value_name = "NAME")]
+        name: String,
+
+        /// Repository URL
+        #[arg(value_name = "URL")]
+        url: String,
+
+        /// Set as default repository
+        #[arg(long)]
+        default: bool,
+
+        /// Repository description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+
+    /// List registered repositories
+    List,
+
+    /// Remove a repository
+    Remove {
+        /// Repository name
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
+
+    /// Set or unset default flag for a repository
+    SetDefault {
+        /// Repository name
+        #[arg(value_name = "NAME")]
+        name: String,
+
+        /// Default flag value (true or false)
+        #[arg(value_name = "VALUE")]
+        value: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCommands {
+    /// Update cached repositories
+    Update {
+        /// Repository name (if empty, updates all)
+        #[arg(value_name = "NAME")]
+        name: Option<String>,
+
+        /// Update all cached repositories
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Clear all cached repositories
+    Clear,
+}
