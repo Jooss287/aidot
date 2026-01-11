@@ -3,6 +3,7 @@ use thiserror::Error;
 
 /// Main error type for aidot
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum AidotError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

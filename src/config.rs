@@ -116,11 +116,13 @@ impl Config {
     }
 
     /// Get a repository by name
+    #[allow(dead_code)]
     pub fn get_repository(&self, name: &str) -> Option<&Repository> {
         self.repositories.iter().find(|r| r.name == name)
     }
 
     /// Get all default repositories
+    #[allow(dead_code)]
     pub fn get_default_repositories(&self) -> Vec<&Repository> {
         self.repositories.iter().filter(|r| r.default).collect()
     }

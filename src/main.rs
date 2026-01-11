@@ -1,3 +1,4 @@
+mod adapters;
 mod cli;
 mod commands;
 mod config;
@@ -84,15 +85,19 @@ fn run() -> Result<()> {
             dry_run,
             force,
         } => {
-            println!("Pull command (not yet implemented)");
-            println!("  Repositories: {:?}", repositories);
-            println!("  Tools: {:?}", tools);
-            println!("  Dry run: {}", dry_run);
-            println!("  Force: {}", force);
+            if repositories.is_empty() {
+                eprintln!("Error: No repository specified.");
+                eprintln!("Usage: aidot pull <repository>");
+                std::process::exit(1);
+            }
+
+            // For now, only support single repository (first one)
+            let repo_source = repositories[0].clone();
+            commands::pull_template(repo_source, tools, dry_run, force)?;
         }
 
         Commands::Detect => {
-            println!("Detect command (not yet implemented)");
+            commands::detect_tools()?;
         }
 
         Commands::Status => {

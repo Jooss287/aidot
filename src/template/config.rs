@@ -69,6 +69,7 @@ fn default_merge_strategy() -> MergeStrategy {
 
 impl TemplateConfig {
     /// Load template configuration from .aidot-config.toml
+    #[allow(dead_code)]
     pub fn load(path: &Path) -> Result<Self> {
         let config_file = path.join(".aidot-config.toml");
 
