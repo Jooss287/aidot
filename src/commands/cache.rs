@@ -1,11 +1,13 @@
 use crate::cache;
-use crate::config::Config;
+use crate::config::{Config, SourceType};
 use crate::error::Result;
 
 /// Update cached repositories
 pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
+    let config = Config::load()?;
+
     if all {
-        // Update all cached repositories
+        // Update all cached repositories (skip local templates)
         let caches = cache::list_caches()?;
 
         if caches.is_empty() {
@@ -16,6 +18,14 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
         println!("Updating {} cached repositories...\n", caches.len());
 
         for cache_name in caches {
+            // Check if this is a local template
+            if let Some(repo) = config.repositories.iter().find(|r| r.name == cache_name) {
+                if repo.source_type == SourceType::Local {
+                    println!("Skipping '{}': local template (no caching needed)", cache_name);
+                    continue;
+                }
+            }
+
             println!("Updating '{}'...", cache_name);
             if let Err(e) = cache::update_cache(&cache_name) {
                 eprintln!("  ✗ Failed: {}", e);
@@ -25,6 +35,14 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
 
         println!("✓ All caches updated");
     } else if let Some(name) = repo_name {
+        // Check if this is a local template
+        if let Some(repo) = config.repositories.iter().find(|r| r.name == name) {
+            if repo.source_type == SourceType::Local {
+                println!("Skipped: '{}' is a local template (no caching needed)", name);
+                return Ok(());
+            }
+        }
+
         // Update specific repository
         cache::update_cache(&name)?;
         println!("✓ Cache '{}' updated successfully", name);

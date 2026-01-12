@@ -36,31 +36,75 @@ fn run() -> Result<()> {
             RepoCommands::Add {
                 name,
                 url,
+                local,
                 default,
                 description,
             } => {
-                println!("Adding repository '{}' from {}", name, url);
-                let mut config = config::Config::load()?;
+                let (resolved_url, source_type) = if local {
+                    // Convert to absolute path
+                    let path = std::path::PathBuf::from(&url);
+                    let absolute_path = if path.is_absolute() {
+                        path
+                    } else {
+                        std::env::current_dir()?.join(&path)
+                    };
+
+                    // Canonicalize to resolve . and ..
+                    let canonical = std::fs::canonicalize(&absolute_path)
+                        .map_err(|_| error::AidotError::RepositoryNotFound(
+                            format!("Local path does not exist: {}", absolute_path.display())
+                        ))?;
+
+                    // Verify it's a directory
+                    if !canonical.is_dir() {
+                        return Err(error::AidotError::RepositoryNotFound(
+                            format!("Path is not a directory: {}", canonical.display())
+                        ).into());
+                    }
+
+                    (canonical.to_string_lossy().to_string(), config::SourceType::Local)
+                } else {
+                    (url.clone(), config::SourceType::Git)
+                };
+
+                let type_label = if local { "local template" } else { "repository" };
+                println!("Adding {} '{}' from {}", type_label, name, resolved_url);
+
+                let mut cfg = config::Config::load()?;
                 let repo = config::Repository {
                     name: name.clone(),
-                    url,
+                    url: resolved_url,
+                    source_type,
                     default,
                     cached_at: None,
                     description,
                 };
-                config.add_repository(repo)?;
-                println!("✓ Repository '{}' added successfully", name);
+                cfg.add_repository(repo)?;
+
+                let default_msg = if default { " [default]" } else { "" };
+                println!("✓ {} '{}' added successfully{}", type_label, name, default_msg);
             }
 
             RepoCommands::List => {
-                let config = config::Config::load()?;
-                if config.repositories.is_empty() {
+                let cfg = config::Config::load()?;
+                if cfg.repositories.is_empty() {
                     println!("No repositories registered.");
                 } else {
                     println!("Registered repositories:");
-                    for repo in &config.repositories {
-                        let default_flag = if repo.default { " [default]" } else { "" };
-                        println!("  - {} ({}){}", repo.name, repo.url, default_flag);
+                    for repo in &cfg.repositories {
+                        let mut flags = Vec::new();
+                        if repo.source_type == config::SourceType::Local {
+                            flags.push("local");
+                        }
+                        if repo.default {
+                            flags.push("default");
+                        }
+                        let flags_str = if flags.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" [{}]", flags.join("] ["))
+                        };
+                        println!("  - {} ({}){}", repo.name, repo.url, flags_str);
                         if let Some(desc) = &repo.description {
                             println!("    {}", desc);
                         }

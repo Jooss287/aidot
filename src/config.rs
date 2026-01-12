@@ -13,11 +13,22 @@ pub struct Config {
     pub history: Vec<HistoryEntry>,
 }
 
+/// Source type for repository
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceType {
+    #[default]
+    Git,
+    Local,
+}
+
 /// Repository entry in global configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
     pub name: String,
     pub url: String,
+    #[serde(default)]
+    pub source_type: SourceType,
     #[serde(default)]
     pub default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,6 +165,7 @@ mod tests {
         let repo = Repository {
             name: "test".to_string(),
             url: "https://github.com/test/repo".to_string(),
+            source_type: SourceType::Git,
             default: true,
             cached_at: Some("2026-01-11T00:00:00Z".to_string()),
             description: Some("Test repository".to_string()),
@@ -165,5 +177,24 @@ mod tests {
         assert_eq!(repo.name, deserialized.name);
         assert_eq!(repo.url, deserialized.url);
         assert_eq!(repo.default, deserialized.default);
+        assert_eq!(repo.source_type, deserialized.source_type);
+    }
+
+    #[test]
+    fn test_local_repository_serialization() {
+        let repo = Repository {
+            name: "local-test".to_string(),
+            url: "/home/user/templates/my-template".to_string(),
+            source_type: SourceType::Local,
+            default: false,
+            cached_at: None,
+            description: Some("Local template".to_string()),
+        };
+
+        let toml = toml::to_string(&repo).unwrap();
+        let deserialized: Repository = toml::from_str(&toml).unwrap();
+
+        assert_eq!(repo.source_type, SourceType::Local);
+        assert_eq!(deserialized.source_type, SourceType::Local);
     }
 }

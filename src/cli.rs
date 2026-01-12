@@ -86,9 +86,13 @@ pub enum RepoCommands {
         #[arg(value_name = "NAME")]
         name: String,
 
-        /// Repository URL
-        #[arg(value_name = "URL")]
+        /// Repository URL or local path
+        #[arg(value_name = "URL_OR_PATH")]
         url: String,
+
+        /// Register as a local template (path will be converted to absolute path)
+        #[arg(long)]
+        local: bool,
 
         /// Set as default repository
         #[arg(long)]

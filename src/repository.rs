@@ -1,5 +1,5 @@
 use crate::cache;
-use crate::config::Config;
+use crate::config::{Config, SourceType};
 use crate::error::Result;
 use std::path::PathBuf;
 
@@ -22,7 +22,7 @@ pub fn is_git_url(source: &str) -> bool {
 /// # Returns
 /// The local path to the template directory
 pub fn resolve_repository_source(source: &str) -> Result<PathBuf> {
-    // Check if it's a local path
+    // Check if it's a local path (direct input)
     let local_path = PathBuf::from(source);
     if local_path.exists() {
         return Ok(local_path);
@@ -31,9 +31,26 @@ pub fn resolve_repository_source(source: &str) -> Result<PathBuf> {
     // Check if it's a registered repository name
     let config = Config::load()?;
     if let Some(repo) = config.repositories.iter().find(|r| r.name == source) {
-        // Use cache
-        let cache_path = cache::ensure_cached(&repo.name, &repo.url)?;
-        return Ok(cache_path);
+        match repo.source_type {
+            SourceType::Local => {
+                // Local template: return path directly (no caching)
+                let path = PathBuf::from(&repo.url);
+                if path.exists() {
+                    println!("Using local template: {}", repo.url);
+                    return Ok(path);
+                } else {
+                    return Err(crate::error::AidotError::RepositoryNotFound(format!(
+                        "Local template path does not exist: {}",
+                        repo.url
+                    )));
+                }
+            }
+            SourceType::Git => {
+                // Git repository: use cache
+                let cache_path = cache::ensure_cached(&repo.name, &repo.url)?;
+                return Ok(cache_path);
+            }
+        }
     }
 
     // Check if it's a Git URL
