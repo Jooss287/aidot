@@ -2,7 +2,19 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(name = "aidot")]
-#[command(version, about = "AI dotfiles - Manage LLM tool configurations", long_about = None)]
+#[command(version, about = "AI dotfiles - Manage LLM tool configurations")]
+#[command(long_about = "aidot (AI dotfiles) is a CLI tool that manages LLM tool configurations \
+across multiple AI coding assistants. It fetches tool-agnostic configuration templates \
+from Git repositories and automatically converts them to the appropriate format for each \
+detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.).")]
+#[command(styles = get_styles())]
+#[command(after_help = "Examples:
+  aidot init                    Initialize a new template repository
+  aidot repo add common <url>   Register a template repository
+  aidot pull common             Apply template to all detected tools
+  aidot pull common --tools cursor,claude  Apply to specific tools only
+  aidot detect                  Show installed LLM tools
+  aidot status                  Show current configuration status")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -14,6 +26,37 @@ pub struct Cli {
     /// Suppress output (quiet mode)
     #[arg(short, long, global = true)]
     pub quiet: bool,
+}
+
+fn get_styles() -> clap::builder::Styles {
+    clap::builder::Styles::styled()
+        .usage(
+            clap::builder::styling::AnsiColor::Cyan
+                .on_default()
+                .bold(),
+        )
+        .header(
+            clap::builder::styling::AnsiColor::Cyan
+                .on_default()
+                .bold(),
+        )
+        .literal(clap::builder::styling::AnsiColor::Green.on_default())
+        .placeholder(clap::builder::styling::AnsiColor::Yellow.on_default())
+        .valid(
+            clap::builder::styling::AnsiColor::Green
+                .on_default()
+                .bold(),
+        )
+        .invalid(
+            clap::builder::styling::AnsiColor::Red
+                .on_default()
+                .bold(),
+        )
+        .error(
+            clap::builder::styling::AnsiColor::Red
+                .on_default()
+                .bold(),
+        )
 }
 
 #[derive(Subcommand, Debug)]
@@ -47,7 +90,7 @@ pub enum Commands {
         #[arg(value_name = "REPO")]
         repositories: Vec<String>,
 
-        /// Apply to specific tools only (comma-separated: cursor,claude,aider,copilot)
+        /// Apply to specific tools only (comma-separated: cursor,claude,copilot)
         #[arg(long, value_delimiter = ',')]
         tools: Option<Vec<String>>,
 

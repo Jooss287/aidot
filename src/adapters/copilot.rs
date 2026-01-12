@@ -1,4 +1,4 @@
-use super::traits::{ApplyResult, TemplateFile, TemplateFiles, ToolAdapter};
+use super::traits::{ApplyResult, PreviewResult, TemplateFile, TemplateFiles, ToolAdapter};
 use crate::error::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -295,5 +295,86 @@ impl ToolAdapter for CopilotAdapter {
         // Note: hooks and settings are not directly applicable to Copilot
 
         Ok(result)
+    }
+
+    fn preview(
+        &self,
+        template_files: &TemplateFiles,
+        _target_dir: &Path,
+    ) -> PreviewResult {
+        let mut result = PreviewResult::new();
+        let instructions_file = self.copilot_instructions_file();
+        let mcp_file = self.vscode_dir().join("mcp.json");
+
+        // Rules → .github/copilot-instructions.md
+        if !template_files.rules.is_empty() {
+            if instructions_file.exists() {
+                result.add_would_update(".github/copilot-instructions.md".to_string(), "rules".to_string());
+            } else {
+                result.add_would_create(".github/copilot-instructions.md".to_string(), "rules".to_string());
+            }
+        }
+
+        // Memory → .github/copilot-instructions.md (appended)
+        if !template_files.memory.is_empty() {
+            result.add_would_update(".github/copilot-instructions.md".to_string(), "memory".to_string());
+        }
+
+        // Commands → .github/prompts/*.prompt.md
+        for file in &template_files.commands {
+            let original_name = file.relative_path.replace("commands/", "");
+            let prompt_name = if original_name.ends_with(".md") {
+                original_name.replace(".md", ".prompt.md")
+            } else {
+                format!("{}.prompt.md", original_name)
+            };
+            let target = format!(".github/prompts/{}", prompt_name);
+            let target_path = self.github_dir().join("prompts").join(&prompt_name);
+            if target_path.exists() {
+                result.add_would_update(target, "commands".to_string());
+            } else {
+                result.add_would_create(target, "commands".to_string());
+            }
+        }
+
+        // MCP → .vscode/mcp.json
+        if !template_files.mcp.is_empty() {
+            if mcp_file.exists() {
+                result.add_would_update(".vscode/mcp.json".to_string(), "mcp".to_string());
+            } else {
+                result.add_would_create(".vscode/mcp.json".to_string(), "mcp".to_string());
+            }
+        }
+
+        // Agents → .github/agents/*.agent.md
+        for file in &template_files.agents {
+            let original_name = file.relative_path.replace("agents/", "");
+            let agent_name = if original_name.ends_with(".md") {
+                original_name.replace(".md", ".agent.md")
+            } else {
+                format!("{}.agent.md", original_name)
+            };
+            let target = format!(".github/agents/{}", agent_name);
+            let target_path = self.github_dir().join("agents").join(&agent_name);
+            if target_path.exists() {
+                result.add_would_update(target, "agents".to_string());
+            } else {
+                result.add_would_create(target, "agents".to_string());
+            }
+        }
+
+        // Skills → .github/skills/
+        for file in &template_files.skills {
+            let filename = file.relative_path.replace("skills/", "");
+            let target = format!(".github/skills/{}", filename);
+            let target_path = self.github_dir().join("skills").join(&filename);
+            if target_path.exists() {
+                result.add_would_update(target, "skills".to_string());
+            } else {
+                result.add_would_create(target, "skills".to_string());
+            }
+        }
+
+        result
     }
 }

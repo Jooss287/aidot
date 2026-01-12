@@ -10,11 +10,12 @@ mod template;
 
 use clap::Parser;
 use cli::{CacheCommands, Cli, Commands, RepoCommands};
+use colored::Colorize;
 use error::Result;
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("Error: {}", e);
+        eprintln!("{} {}", "Error:".red().bold(), e);
         std::process::exit(1);
     }
 }
@@ -50,25 +51,42 @@ fn run() -> Result<()> {
                     };
 
                     // Canonicalize to resolve . and ..
-                    let canonical = std::fs::canonicalize(&absolute_path)
-                        .map_err(|_| error::AidotError::RepositoryNotFound(
-                            format!("Local path does not exist: {}", absolute_path.display())
-                        ))?;
+                    let canonical = std::fs::canonicalize(&absolute_path).map_err(|_| {
+                        error::AidotError::RepositoryNotFound(format!(
+                            "Local path does not exist: {}",
+                            absolute_path.display()
+                        ))
+                    })?;
 
                     // Verify it's a directory
                     if !canonical.is_dir() {
-                        return Err(error::AidotError::RepositoryNotFound(
-                            format!("Path is not a directory: {}", canonical.display())
-                        ).into());
+                        return Err(error::AidotError::RepositoryNotFound(format!(
+                            "Path is not a directory: {}",
+                            canonical.display()
+                        ))
+                        .into());
                     }
 
-                    (canonical.to_string_lossy().to_string(), config::SourceType::Local)
+                    (
+                        canonical.to_string_lossy().to_string(),
+                        config::SourceType::Local,
+                    )
                 } else {
                     (url.clone(), config::SourceType::Git)
                 };
 
-                let type_label = if local { "local template" } else { "repository" };
-                println!("Adding {} '{}' from {}", type_label, name, resolved_url);
+                let type_label = if local {
+                    "local template".yellow()
+                } else {
+                    "repository".cyan()
+                };
+                println!(
+                    "{} {} '{}' from {}",
+                    "Adding".cyan(),
+                    type_label,
+                    name.white().bold(),
+                    resolved_url.dimmed()
+                );
 
                 let mut cfg = config::Config::load()?;
                 let repo = config::Repository {
@@ -81,32 +99,53 @@ fn run() -> Result<()> {
                 };
                 cfg.add_repository(repo)?;
 
-                let default_msg = if default { " [default]" } else { "" };
-                println!("✓ {} '{}' added successfully{}", type_label, name, default_msg);
+                let default_msg = if default {
+                    format!(" {}", "[default]".green())
+                } else {
+                    String::new()
+                };
+                println!(
+                    "{} {} '{}' added successfully{}",
+                    "✓".green(),
+                    if local { "Local template" } else { "Repository" },
+                    name.white().bold(),
+                    default_msg
+                );
             }
 
             RepoCommands::List => {
                 let cfg = config::Config::load()?;
                 if cfg.repositories.is_empty() {
-                    println!("No repositories registered.");
+                    println!("{}", "No repositories registered.".yellow());
+                    println!(
+                        "{}",
+                        "Use 'aidot repo add <name> <url>' to register a template repository."
+                            .dimmed()
+                    );
                 } else {
-                    println!("Registered repositories:");
+                    println!("{}", "Registered repositories:".cyan().bold());
                     for repo in &cfg.repositories {
                         let mut flags = Vec::new();
                         if repo.source_type == config::SourceType::Local {
-                            flags.push("local");
+                            flags.push("local".yellow().to_string());
                         }
                         if repo.default {
-                            flags.push("default");
+                            flags.push("default".green().to_string());
                         }
                         let flags_str = if flags.is_empty() {
                             String::new()
                         } else {
                             format!(" [{}]", flags.join("] ["))
                         };
-                        println!("  - {} ({}){}", repo.name, repo.url, flags_str);
+                        println!(
+                            "  {} {} {}{}",
+                            "•".cyan(),
+                            repo.name.white().bold(),
+                            repo.url.dimmed(),
+                            flags_str
+                        );
                         if let Some(desc) = &repo.description {
-                            println!("    {}", desc);
+                            println!("    {}", desc.dimmed());
                         }
                     }
                 }
@@ -115,14 +154,27 @@ fn run() -> Result<()> {
             RepoCommands::Remove { name } => {
                 let mut config = config::Config::load()?;
                 config.remove_repository(&name)?;
-                println!("✓ Repository '{}' removed successfully", name);
+                println!(
+                    "{} Repository '{}' removed successfully",
+                    "✓".green(),
+                    name.white().bold()
+                );
             }
 
             RepoCommands::SetDefault { name, value } => {
                 let mut config = config::Config::load()?;
                 config.set_default(&name, value)?;
-                let status = if value { "set as default" } else { "unset as default" };
-                println!("✓ Repository '{}' {}", name, status);
+                let status = if value {
+                    "set as default".green()
+                } else {
+                    "unset as default".yellow()
+                };
+                println!(
+                    "{} Repository '{}' {}",
+                    "✓".green(),
+                    name.white().bold(),
+                    status
+                );
             }
         },
 
@@ -133,8 +185,12 @@ fn run() -> Result<()> {
             force,
         } => {
             if repositories.is_empty() {
-                eprintln!("Error: No repository specified.");
-                eprintln!("Usage: aidot pull <repository>");
+                eprintln!("{} {}", "Error:".red().bold(), "No repository specified.");
+                eprintln!(
+                    "{} {}",
+                    "Usage:".dimmed(),
+                    "aidot pull <repository>".white()
+                );
                 std::process::exit(1);
             }
 
@@ -148,7 +204,7 @@ fn run() -> Result<()> {
         }
 
         Commands::Status => {
-            println!("Status command (not yet implemented)");
+            commands::show_status()?;
         }
 
         Commands::Cache(cache_cmd) => match cache_cmd {
@@ -161,8 +217,12 @@ fn run() -> Result<()> {
         },
 
         Commands::Diff { repository } => {
-            println!("Diff command (not yet implemented)");
-            println!("  Repository: {}", repository);
+            println!(
+                "{} {}",
+                "Diff command".yellow(),
+                "(not yet implemented)".dimmed()
+            );
+            println!("  {} {}", "Repository:".dimmed(), repository.white());
         }
     }
 

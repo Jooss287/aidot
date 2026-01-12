@@ -34,6 +34,13 @@ pub trait ToolAdapter {
         target_dir: &Path,
         force: bool,
     ) -> Result<ApplyResult>;
+
+    /// Preview what changes would be made (for dry-run mode)
+    fn preview(
+        &self,
+        template_files: &TemplateFiles,
+        target_dir: &Path,
+    ) -> PreviewResult;
 }
 
 /// Template files organized by section
@@ -77,7 +84,57 @@ impl ApplyResult {
         self.updated.push(path);
     }
 
+    #[allow(dead_code)]
     pub fn add_skipped(&mut self, path: String) {
         self.skipped.push(path);
+    }
+
+    /// Check if any changes would be made
+    pub fn has_changes(&self) -> bool {
+        !self.created.is_empty() || !self.updated.is_empty()
+    }
+}
+
+/// Preview result for dry-run mode
+#[derive(Debug)]
+pub struct PreviewResult {
+    /// Files that would be created
+    pub would_create: Vec<PreviewFile>,
+    /// Files that would be updated
+    pub would_update: Vec<PreviewFile>,
+    /// Files that would be skipped
+    pub would_skip: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct PreviewFile {
+    pub path: String,
+    pub section: String,
+}
+
+impl PreviewResult {
+    pub fn new() -> Self {
+        Self {
+            would_create: Vec::new(),
+            would_update: Vec::new(),
+            would_skip: Vec::new(),
+        }
+    }
+
+    pub fn add_would_create(&mut self, path: String, section: String) {
+        self.would_create.push(PreviewFile { path, section });
+    }
+
+    pub fn add_would_update(&mut self, path: String, section: String) {
+        self.would_update.push(PreviewFile { path, section });
+    }
+
+    #[allow(dead_code)]
+    pub fn add_would_skip(&mut self, path: String) {
+        self.would_skip.push(path);
+    }
+
+    pub fn has_changes(&self) -> bool {
+        !self.would_create.is_empty() || !self.would_update.is_empty()
     }
 }

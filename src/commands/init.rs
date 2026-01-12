@@ -1,5 +1,6 @@
 use crate::error::{AidotError, Result};
 use crate::template::TemplateConfig;
+use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -28,13 +29,20 @@ pub fn init_template(
         init_empty_template(&target_dir)?;
     }
 
-    println!("✓ Template repository initialized at {}", target_dir.display());
+    println!(
+        "{} {}",
+        "✓ Template repository initialized at".green().bold(),
+        target_dir.display().to_string().white()
+    );
     Ok(())
 }
 
 /// Initialize an empty template repository
 fn init_empty_template(path: &Path) -> Result<()> {
-    println!("Initializing empty aidot template repository...\n");
+    println!(
+        "{}\n",
+        "Initializing empty aidot template repository...".cyan()
+    );
 
     // Create directory structure
     let directories = vec![
@@ -52,7 +60,12 @@ fn init_empty_template(path: &Path) -> Result<()> {
         let dir_path = path.join(dir);
         if !dir_path.exists() {
             fs::create_dir_all(&dir_path)?;
-            println!("  ✓ Created {}/", dir);
+            println!(
+                "  {} {} {}/",
+                "✓".green(),
+                "Created".green(),
+                dir.white()
+            );
         }
     }
 
@@ -63,18 +76,41 @@ fn init_empty_template(path: &Path) -> Result<()> {
         .unwrap_or("llm-template");
     let config = TemplateConfig::default_template(template_name);
     config.save(path)?;
-    println!("  ✓ Created .aidot-config.toml");
+    println!(
+        "  {} {} {}",
+        "✓".green(),
+        "Created".green(),
+        ".aidot-config.toml".white()
+    );
 
     // Create README.md
     create_readme(path, template_name)?;
 
-    println!("\nTemplate repository initialized!");
-    println!("\nNext steps:");
-    println!("  1. Add your configuration files to rules/, memory/, commands/, etc.");
-    println!("  2. Customize .aidot-config.toml");
-    println!("  3. git init && git add . && git commit -m 'Initial template'");
-    println!("  4. Push to your Git repository");
-    println!("  5. Use with: aidot repo add <name> <url>");
+    println!("\n{}", "Template repository initialized!".green().bold());
+    println!("\n{}:", "Next steps".cyan().bold());
+    println!(
+        "  {} Add your configuration files to {}, {}, {}, etc.",
+        "1.".white(),
+        "rules/".cyan(),
+        "memory/".cyan(),
+        "commands/".cyan()
+    );
+    println!(
+        "  {} Customize {}",
+        "2.".white(),
+        ".aidot-config.toml".cyan()
+    );
+    println!(
+        "  {} {}",
+        "3.".white(),
+        "git init && git add . && git commit -m 'Initial template'".dimmed()
+    );
+    println!("  {} Push to your Git repository", "4.".white());
+    println!(
+        "  {} Use with: {}",
+        "5.".white(),
+        "aidot repo add <name> <url>".cyan()
+    );
 
     Ok(())
 }
@@ -188,7 +224,12 @@ aidot automatically converts these configurations to the appropriate format for 
     );
 
     fs::write(path.join("README.md"), readme)?;
-    println!("  ✓ Created README.md");
+    println!(
+        "  {} {} {}",
+        "✓".green(),
+        "Created".green(),
+        "README.md".white()
+    );
 
     Ok(())
 }

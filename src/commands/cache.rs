@@ -1,6 +1,7 @@
 use crate::cache;
 use crate::config::{Config, SourceType};
 use crate::error::Result;
+use colored::Colorize;
 
 /// Update cached repositories
 pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
@@ -11,43 +12,104 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
         let caches = cache::list_caches()?;
 
         if caches.is_empty() {
-            println!("No cached repositories found.");
+            println!("{}", "No cached repositories found.".yellow());
             return Ok(());
         }
 
-        println!("Updating {} cached repositories...\n", caches.len());
+        println!(
+            "{} {} {}\n",
+            "Updating".cyan(),
+            caches.len().to_string().white().bold(),
+            "cached repositories...".cyan()
+        );
+
+        let mut success_count = 0;
+        let mut skip_count = 0;
+        let mut fail_count = 0;
 
         for cache_name in caches {
             // Check if this is a local template
             if let Some(repo) = config.repositories.iter().find(|r| r.name == cache_name) {
                 if repo.source_type == SourceType::Local {
-                    println!("Skipping '{}': local template (no caching needed)", cache_name);
+                    println!(
+                        "  {} '{}': {}",
+                        "⊘".yellow(),
+                        cache_name.white(),
+                        "local template (no caching needed)".dimmed()
+                    );
+                    skip_count += 1;
                     continue;
                 }
             }
 
-            println!("Updating '{}'...", cache_name);
-            if let Err(e) = cache::update_cache(&cache_name) {
-                eprintln!("  ✗ Failed: {}", e);
+            print!("  {} '{}'... ", "↻".cyan(), cache_name.white());
+            match cache::update_cache(&cache_name) {
+                Ok(_) => {
+                    println!("{}", "done".green());
+                    success_count += 1;
+                }
+                Err(e) => {
+                    println!("{}", "failed".red());
+                    eprintln!("    {} {}", "Error:".red(), e);
+                    fail_count += 1;
+                }
             }
-            println!();
         }
 
-        println!("✓ All caches updated");
+        println!();
+        if fail_count == 0 {
+            println!(
+                "{} {} updated, {} skipped",
+                "✓".green(),
+                success_count.to_string().green(),
+                skip_count.to_string().yellow()
+            );
+        } else {
+            println!(
+                "{} {} updated, {} skipped, {} failed",
+                "!".yellow(),
+                success_count.to_string().green(),
+                skip_count.to_string().yellow(),
+                fail_count.to_string().red()
+            );
+        }
     } else if let Some(name) = repo_name {
         // Check if this is a local template
         if let Some(repo) = config.repositories.iter().find(|r| r.name == name) {
             if repo.source_type == SourceType::Local {
-                println!("Skipped: '{}' is a local template (no caching needed)", name);
+                println!(
+                    "{} '{}' is a local template {}",
+                    "⊘".yellow(),
+                    name.white().bold(),
+                    "(no caching needed)".dimmed()
+                );
                 return Ok(());
             }
         }
 
         // Update specific repository
+        println!(
+            "{} '{}'...",
+            "Updating cache for".cyan(),
+            name.white().bold()
+        );
         cache::update_cache(&name)?;
-        println!("✓ Cache '{}' updated successfully", name);
+        println!(
+            "{} Cache '{}' updated successfully",
+            "✓".green(),
+            name.white().bold()
+        );
     } else {
-        eprintln!("Error: Specify a repository name or use --all");
+        eprintln!(
+            "{} {}",
+            "Error:".red().bold(),
+            "Specify a repository name or use --all"
+        );
+        eprintln!(
+            "{} {}",
+            "Usage:".dimmed(),
+            "aidot cache update <name> or aidot cache update --all".white()
+        );
         std::process::exit(1);
     }
 
@@ -56,7 +118,10 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
 
 /// Clear all cached repositories
 pub fn clear_cache() -> Result<()> {
-    cache::clear_all_caches()
+    println!("{}", "Clearing all cached repositories...".cyan());
+    cache::clear_all_caches()?;
+    println!("{} {}", "✓".green(), "All caches cleared".green().bold());
+    Ok(())
 }
 
 /// List all cached repositories
@@ -64,14 +129,19 @@ pub fn list_cache() -> Result<()> {
     let caches = cache::list_caches()?;
 
     if caches.is_empty() {
-        println!("No cached repositories.");
+        println!("{}", "No cached repositories.".yellow());
         return Ok(());
     }
 
-    println!("Cached repositories:");
+    println!("{}", "Cached repositories:".cyan().bold());
     for cache_name in caches {
         let cache_path = cache::get_cache_path(&cache_name)?;
-        println!("  - {} ({})", cache_name, cache_path.display());
+        println!(
+            "  {} {} {}",
+            "•".cyan(),
+            cache_name.white().bold(),
+            cache_path.display().to_string().dimmed()
+        );
     }
 
     Ok(())
