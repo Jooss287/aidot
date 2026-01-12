@@ -3,6 +3,44 @@ use crate::template::TemplateConfig;
 use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
+
+/// Extracted file info from existing LLM tool configurations
+#[derive(Debug, Default)]
+struct ExtractedFiles {
+    rules: Vec<(String, String)>,      // (filename, content)
+    memory: Vec<(String, String)>,     // (filename, content)
+    commands: Vec<(String, String)>,   // (filename, content)
+    mcp: Vec<(String, String)>,        // (filename, content)
+    hooks: Vec<(String, String)>,      // (filename, content)
+    agents: Vec<(String, String)>,     // (filename, content)
+    skills: Vec<(String, String)>,     // (filename, content)
+    settings: Vec<(String, String)>,   // (filename, content)
+}
+
+impl ExtractedFiles {
+    fn is_empty(&self) -> bool {
+        self.rules.is_empty()
+            && self.memory.is_empty()
+            && self.commands.is_empty()
+            && self.mcp.is_empty()
+            && self.hooks.is_empty()
+            && self.agents.is_empty()
+            && self.skills.is_empty()
+            && self.settings.is_empty()
+    }
+
+    fn total_count(&self) -> usize {
+        self.rules.len()
+            + self.memory.len()
+            + self.commands.len()
+            + self.mcp.len()
+            + self.hooks.len()
+            + self.agents.len()
+            + self.skills.len()
+            + self.settings.len()
+    }
+}
 
 /// Initialize a new template repository
 pub fn init_template(
@@ -116,11 +154,611 @@ fn init_empty_template(path: &Path) -> Result<()> {
 }
 
 /// Initialize template from existing LLM configurations
-fn init_from_existing(_path: &Path) -> Result<()> {
-    // TODO: Implement in Phase 6
-    Err(AidotError::InvalidTemplate(
-        "--from-existing is not yet implemented".to_string(),
-    ))
+fn init_from_existing(path: &Path) -> Result<()> {
+    println!(
+        "{}\n",
+        "Extracting template from existing LLM configurations...".cyan()
+    );
+
+    let mut extracted = ExtractedFiles::default();
+    let mut sources_found: Vec<String> = Vec::new();
+
+    // Scan for Claude Code configurations
+    if let Some(count) = extract_claude_code(path, &mut extracted)? {
+        sources_found.push(format!("Claude Code ({} files)", count));
+    }
+
+    // Scan for Cursor configurations
+    if let Some(count) = extract_cursor(path, &mut extracted)? {
+        sources_found.push(format!("Cursor ({} files)", count));
+    }
+
+    // Scan for GitHub Copilot configurations
+    if let Some(count) = extract_copilot(path, &mut extracted)? {
+        sources_found.push(format!("GitHub Copilot ({} files)", count));
+    }
+
+    if extracted.is_empty() {
+        println!(
+            "{} {}",
+            "⚠".yellow(),
+            "No existing LLM configurations found.".yellow()
+        );
+        println!(
+            "  {}",
+            "Looked for: .claude/, .cursor/, .cursorrules, .github/".dimmed()
+        );
+        println!(
+            "\n  {} {}",
+            "Tip:".cyan(),
+            "Use 'aidot init' to create an empty template instead.".white()
+        );
+        return Ok(());
+    }
+
+    // Print sources found
+    println!("{}", "Found configurations from:".cyan());
+    for source in &sources_found {
+        println!("  {} {}", "•".cyan(), source.white());
+    }
+    println!();
+
+    // Create directory structure
+    let directories = vec![
+        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings",
+    ];
+
+    for dir in &directories {
+        let dir_path = path.join(dir);
+        if !dir_path.exists() {
+            fs::create_dir_all(&dir_path)?;
+        }
+    }
+
+    // Write extracted files
+    let mut written_count = 0;
+
+    written_count += write_extracted_files(path, "rules", &extracted.rules)?;
+    written_count += write_extracted_files(path, "memory", &extracted.memory)?;
+    written_count += write_extracted_files(path, "commands", &extracted.commands)?;
+    written_count += write_extracted_files(path, "mcp", &extracted.mcp)?;
+    written_count += write_extracted_files(path, "hooks", &extracted.hooks)?;
+    written_count += write_extracted_files(path, "agents", &extracted.agents)?;
+    written_count += write_extracted_files(path, "skills", &extracted.skills)?;
+    written_count += write_extracted_files(path, "settings", &extracted.settings)?;
+
+    // Create .aidot-config.toml
+    let template_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("llm-template");
+    let config = TemplateConfig::default_template(template_name);
+    config.save(path)?;
+    println!(
+        "  {} {} {}",
+        "✓".green(),
+        "Created".green(),
+        ".aidot-config.toml".white()
+    );
+
+    // Create README.md
+    create_readme(path, template_name)?;
+
+    println!(
+        "\n{} {} files extracted from existing configurations",
+        "✓".green(),
+        written_count.to_string().white().bold()
+    );
+
+    println!("\n{}:", "Next steps".cyan().bold());
+    println!(
+        "  {} Review and organize the extracted files in {}, {}, etc.",
+        "1.".white(),
+        "rules/".cyan(),
+        "memory/".cyan()
+    );
+    println!(
+        "  {} Remove any tool-specific content that shouldn't be shared",
+        "2.".white()
+    );
+    println!(
+        "  {} Customize {}",
+        "3.".white(),
+        ".aidot-config.toml".cyan()
+    );
+    println!(
+        "  {} {}",
+        "4.".white(),
+        "git init && git add . && git commit -m 'Initial template'".dimmed()
+    );
+
+    Ok(())
+}
+
+/// Write extracted files to a directory
+fn write_extracted_files(
+    base_path: &Path,
+    dir_name: &str,
+    files: &[(String, String)],
+) -> Result<usize> {
+    let dir_path = base_path.join(dir_name);
+    let mut count = 0;
+
+    for (filename, content) in files {
+        let file_path = dir_path.join(filename);
+
+        // Create parent directories if needed
+        if let Some(parent) = file_path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+
+        fs::write(&file_path, content)?;
+        println!(
+            "  {} {} {}/{}",
+            "✓".green(),
+            "Extracted".green(),
+            dir_name.cyan(),
+            filename.white()
+        );
+        count += 1;
+    }
+
+    Ok(count)
+}
+
+/// Extract configurations from Claude Code (.claude/)
+fn extract_claude_code(source_path: &Path, extracted: &mut ExtractedFiles) -> Result<Option<usize>> {
+    let claude_dir = source_path.join(".claude");
+    if !claude_dir.exists() {
+        return Ok(None);
+    }
+
+    let mut count = 0;
+
+    // .claude/rules/ → rules/
+    let rules_dir = claude_dir.join("rules");
+    if rules_dir.exists() {
+        for entry in WalkDir::new(&rules_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "md" {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        let relative = path.strip_prefix(&rules_dir).unwrap_or(path);
+                        extracted
+                            .rules
+                            .push((relative.to_string_lossy().to_string(), content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .claude/CLAUDE.md → memory/claude-memory.md
+    let claude_md = claude_dir.join("CLAUDE.md");
+    if claude_md.exists() {
+        if let Ok(content) = fs::read_to_string(&claude_md) {
+            extracted
+                .memory
+                .push(("claude-memory.md".to_string(), content));
+            count += 1;
+        }
+    }
+
+    // Root CLAUDE.md → memory/project-memory.md
+    let root_claude_md = source_path.join("CLAUDE.md");
+    if root_claude_md.exists() {
+        if let Ok(content) = fs::read_to_string(&root_claude_md) {
+            extracted
+                .memory
+                .push(("project-memory.md".to_string(), content));
+            count += 1;
+        }
+    }
+
+    // .claude/commands/ → commands/
+    let commands_dir = claude_dir.join("commands");
+    if commands_dir.exists() {
+        for entry in WalkDir::new(&commands_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "md" {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        let relative = path.strip_prefix(&commands_dir).unwrap_or(path);
+                        extracted
+                            .commands
+                            .push((relative.to_string_lossy().to_string(), content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .claude/settings.local.json → mcp/ and settings/
+    let settings_file = claude_dir.join("settings.local.json");
+    if settings_file.exists() {
+        if let Ok(content) = fs::read_to_string(&settings_file) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Extract mcpServers section
+                if let Some(mcp_servers) = json.get("mcpServers") {
+                    if let Some(obj) = mcp_servers.as_object() {
+                        for (name, config) in obj {
+                            let mcp_content =
+                                serde_json::to_string_pretty(config).unwrap_or_default();
+                            extracted.mcp.push((format!("{}.json", name), mcp_content));
+                            count += 1;
+                        }
+                    }
+                }
+
+                // Extract other settings (exclude mcpServers)
+                let mut settings_obj = json.clone();
+                if let Some(obj) = settings_obj.as_object_mut() {
+                    obj.remove("mcpServers");
+                    if !obj.is_empty() {
+                        let settings_content =
+                            serde_json::to_string_pretty(&settings_obj).unwrap_or_default();
+                        extracted
+                            .settings
+                            .push(("claude-settings.json".to_string(), settings_content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .claude/hooks.json → hooks/
+    let hooks_file = claude_dir.join("hooks.json");
+    if hooks_file.exists() {
+        if let Ok(content) = fs::read_to_string(&hooks_file) {
+            extracted.hooks.push(("claude-hooks.json".to_string(), content));
+            count += 1;
+        }
+    }
+
+    // .claude/agents/ → agents/
+    let agents_dir = claude_dir.join("agents");
+    if agents_dir.exists() {
+        for entry in WalkDir::new(&agents_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Ok(content) = fs::read_to_string(path) {
+                let relative = path.strip_prefix(&agents_dir).unwrap_or(path);
+                extracted
+                    .agents
+                    .push((relative.to_string_lossy().to_string(), content));
+                count += 1;
+            }
+        }
+    }
+
+    // .claude/skills/ → skills/
+    let skills_dir = claude_dir.join("skills");
+    if skills_dir.exists() {
+        for entry in WalkDir::new(&skills_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Ok(content) = fs::read_to_string(path) {
+                let relative = path.strip_prefix(&skills_dir).unwrap_or(path);
+                extracted
+                    .skills
+                    .push((relative.to_string_lossy().to_string(), content));
+                count += 1;
+            }
+        }
+    }
+
+    if count > 0 {
+        Ok(Some(count))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Extract configurations from Cursor (.cursorrules, .cursor/)
+fn extract_cursor(source_path: &Path, extracted: &mut ExtractedFiles) -> Result<Option<usize>> {
+    let mut count = 0;
+
+    // .cursorrules → rules/cursorrules.md
+    let cursorrules = source_path.join(".cursorrules");
+    if cursorrules.exists() {
+        if let Ok(content) = fs::read_to_string(&cursorrules) {
+            extracted
+                .rules
+                .push(("cursorrules.md".to_string(), content));
+            count += 1;
+        }
+    }
+
+    let cursor_dir = source_path.join(".cursor");
+    if !cursor_dir.exists() && count == 0 {
+        return Ok(None);
+    }
+
+    if cursor_dir.exists() {
+        // .cursor/rules/ → rules/
+        let rules_dir = cursor_dir.join("rules");
+        if rules_dir.exists() {
+            for entry in WalkDir::new(&rules_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "md" || ext == "mdc" {
+                        if let Ok(content) = fs::read_to_string(path) {
+                            let relative = path.strip_prefix(&rules_dir).unwrap_or(path);
+                            let filename = relative.to_string_lossy().to_string();
+                            // Convert .mdc to .md
+                            let filename = if filename.ends_with(".mdc") {
+                                filename.replace(".mdc", ".md")
+                            } else {
+                                filename
+                            };
+                            // Prefix with cursor- to avoid conflicts
+                            let prefixed = format!("cursor-{}", filename);
+                            extracted.rules.push((prefixed, content));
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        // .cursor/commands/ → commands/
+        let commands_dir = cursor_dir.join("commands");
+        if commands_dir.exists() {
+            for entry in WalkDir::new(&commands_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                let path = entry.path();
+                if let Ok(content) = fs::read_to_string(path) {
+                    let relative = path.strip_prefix(&commands_dir).unwrap_or(path);
+                    extracted
+                        .commands
+                        .push((relative.to_string_lossy().to_string(), content));
+                    count += 1;
+                }
+            }
+        }
+
+        // .cursor/mcp.json → mcp/
+        let mcp_file = cursor_dir.join("mcp.json");
+        if mcp_file.exists() {
+            if let Ok(content) = fs::read_to_string(&mcp_file) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(mcp_servers) = json.get("mcpServers") {
+                        if let Some(obj) = mcp_servers.as_object() {
+                            for (name, config) in obj {
+                                let mcp_content =
+                                    serde_json::to_string_pretty(config).unwrap_or_default();
+                                // Prefix with cursor- to avoid conflicts
+                                extracted
+                                    .mcp
+                                    .push((format!("cursor-{}.json", name), mcp_content));
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // .cursor/hooks.json → hooks/
+        let hooks_file = cursor_dir.join("hooks.json");
+        if hooks_file.exists() {
+            if let Ok(content) = fs::read_to_string(&hooks_file) {
+                extracted
+                    .hooks
+                    .push(("cursor-hooks.json".to_string(), content));
+                count += 1;
+            }
+        }
+
+        // .cursor/agents/ → agents/
+        let agents_dir = cursor_dir.join("agents");
+        if agents_dir.exists() {
+            for entry in WalkDir::new(&agents_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                let path = entry.path();
+                if let Ok(content) = fs::read_to_string(path) {
+                    let relative = path.strip_prefix(&agents_dir).unwrap_or(path);
+                    extracted
+                        .agents
+                        .push((relative.to_string_lossy().to_string(), content));
+                    count += 1;
+                }
+            }
+        }
+
+        // .cursor/skills/ → skills/
+        let skills_dir = cursor_dir.join("skills");
+        if skills_dir.exists() {
+            for entry in WalkDir::new(&skills_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                let path = entry.path();
+                if let Ok(content) = fs::read_to_string(path) {
+                    let relative = path.strip_prefix(&skills_dir).unwrap_or(path);
+                    extracted
+                        .skills
+                        .push((relative.to_string_lossy().to_string(), content));
+                    count += 1;
+                }
+            }
+        }
+    }
+
+    if count > 0 {
+        Ok(Some(count))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Extract configurations from GitHub Copilot (.github/)
+fn extract_copilot(source_path: &Path, extracted: &mut ExtractedFiles) -> Result<Option<usize>> {
+    let github_dir = source_path.join(".github");
+    if !github_dir.exists() {
+        return Ok(None);
+    }
+
+    let mut count = 0;
+
+    // .github/copilot-instructions.md → rules/copilot-instructions.md
+    let instructions = github_dir.join("copilot-instructions.md");
+    if instructions.exists() {
+        if let Ok(content) = fs::read_to_string(&instructions) {
+            extracted
+                .rules
+                .push(("copilot-instructions.md".to_string(), content));
+            count += 1;
+        }
+    }
+
+    // .github/instructions/*.instructions.md → rules/
+    let instructions_dir = github_dir.join("instructions");
+    if instructions_dir.exists() {
+        for entry in WalkDir::new(&instructions_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".instructions.md") {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        // Convert .instructions.md to .md
+                        let filename = name.replace(".instructions.md", ".md");
+                        extracted
+                            .rules
+                            .push((format!("copilot-{}", filename), content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .github/prompts/*.prompt.md → commands/
+    let prompts_dir = github_dir.join("prompts");
+    if prompts_dir.exists() {
+        for entry in WalkDir::new(&prompts_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".prompt.md") {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        // Convert .prompt.md to .md
+                        let filename = name.replace(".prompt.md", ".md");
+                        extracted.commands.push((filename, content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .vscode/mcp.json → mcp/
+    let vscode_dir = source_path.join(".vscode");
+    let mcp_file = vscode_dir.join("mcp.json");
+    if mcp_file.exists() {
+        if let Ok(content) = fs::read_to_string(&mcp_file) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Check both "mcpServers" and "servers" keys
+                let servers = json
+                    .get("mcpServers")
+                    .or_else(|| json.get("servers"));
+
+                if let Some(servers_obj) = servers.and_then(|s| s.as_object()) {
+                    for (name, config) in servers_obj {
+                        let mcp_content =
+                            serde_json::to_string_pretty(config).unwrap_or_default();
+                        extracted
+                            .mcp
+                            .push((format!("vscode-{}.json", name), mcp_content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .github/agents/*.agent.md → agents/
+    let agents_dir = github_dir.join("agents");
+    if agents_dir.exists() {
+        for entry in WalkDir::new(&agents_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".agent.md") {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        // Convert .agent.md to .md
+                        let filename = name.replace(".agent.md", ".md");
+                        extracted.agents.push((filename, content));
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // .github/skills/ → skills/
+    let skills_dir = github_dir.join("skills");
+    if skills_dir.exists() {
+        for entry in WalkDir::new(&skills_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if let Ok(content) = fs::read_to_string(path) {
+                let relative = path.strip_prefix(&skills_dir).unwrap_or(path);
+                extracted
+                    .skills
+                    .push((relative.to_string_lossy().to_string(), content));
+                count += 1;
+            }
+        }
+    }
+
+    if count > 0 {
+        Ok(Some(count))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Create README.md for the template repository
