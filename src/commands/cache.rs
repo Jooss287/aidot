@@ -124,26 +124,3 @@ pub fn clear_cache() -> Result<()> {
     Ok(())
 }
 
-/// List all cached repositories
-#[allow(dead_code)]
-pub fn list_cache() -> Result<()> {
-    let caches = cache::list_caches()?;
-
-    if caches.is_empty() {
-        println!("{}", "No cached repositories.".yellow());
-        return Ok(());
-    }
-
-    println!("{}", "Cached repositories:".cyan().bold());
-    for cache_name in caches {
-        let cache_path = cache::get_cache_path(&cache_name)?;
-        println!(
-            "  {} {} {}",
-            "•".cyan(),
-            cache_name.white().bold(),
-            cache_path.display().to_string().dimmed()
-        );
-    }
-
-    Ok(())
-}

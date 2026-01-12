@@ -150,3 +150,66 @@ impl PreviewResult {
         !self.would_create.is_empty() || !self.would_update.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_file_creation() {
+        let file = TemplateFile {
+            relative_path: "rules/code-style.md".to_string(),
+            content: "# Code Style Rules".to_string(),
+        };
+        assert_eq!(file.relative_path, "rules/code-style.md");
+        assert_eq!(file.content, "# Code Style Rules");
+    }
+
+    #[test]
+    fn test_template_files_default() {
+        let files = TemplateFiles::default();
+        assert!(files.rules.is_empty());
+        assert!(files.memory.is_empty());
+        assert!(files.commands.is_empty());
+        assert!(files.mcp.is_empty());
+        assert!(files.hooks.is_empty());
+        assert!(files.agents.is_empty());
+        assert!(files.skills.is_empty());
+        assert!(files.settings.is_empty());
+        assert_eq!(files.rules_strategy, MergeStrategy::Concat);
+    }
+
+    #[test]
+    fn test_apply_result() {
+        let mut result = ApplyResult::new();
+        assert!(!result.has_changes());
+
+        result.add_created("file1.md".to_string());
+        assert!(result.has_changes());
+        assert_eq!(result.created.len(), 1);
+
+        result.add_updated("file2.md".to_string());
+        assert_eq!(result.updated.len(), 1);
+
+        result.add_skipped("file3.md".to_string());
+        assert_eq!(result.skipped.len(), 1);
+    }
+
+    #[test]
+    fn test_preview_result() {
+        let mut result = PreviewResult::new();
+        assert!(!result.has_changes());
+
+        result.add_would_create("file1.md".to_string(), "rules".to_string());
+        assert!(result.has_changes());
+        assert_eq!(result.would_create.len(), 1);
+        assert_eq!(result.would_create[0].path, "file1.md");
+        assert_eq!(result.would_create[0].section, "rules");
+
+        result.add_would_update("file2.md".to_string(), "memory".to_string());
+        assert_eq!(result.would_update.len(), 1);
+
+        result.add_would_skip("file3.md".to_string());
+        assert_eq!(result.would_skip.len(), 1);
+    }
+}

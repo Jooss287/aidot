@@ -184,19 +184,61 @@ fn run() -> Result<()> {
             dry_run,
             force,
         } => {
-            if repositories.is_empty() {
-                eprintln!("{} {}", "Error:".red().bold(), "No repository specified.");
-                eprintln!(
+            let repos_to_apply: Vec<String> = if repositories.is_empty() {
+                // Apply all default repositories
+                let cfg = config::Config::load()?;
+                let defaults: Vec<String> = cfg
+                    .repositories
+                    .iter()
+                    .filter(|r| r.default)
+                    .map(|r| r.name.clone())
+                    .collect();
+
+                if defaults.is_empty() {
+                    println!("{}", "No default repositories configured.".yellow());
+                    println!(
+                        "{}",
+                        "Use 'aidot repo add <name> <url> --default' to register a default repository."
+                            .dimmed()
+                    );
+                    println!(
+                        "{}",
+                        "Or specify a repository: 'aidot pull <repository>'".dimmed()
+                    );
+                    return Ok(());
+                }
+
+                println!(
                     "{} {}",
-                    "Usage:".dimmed(),
-                    "aidot pull <repository>".white()
+                    "Applying".cyan(),
+                    format!("{} default repository(s)...", defaults.len()).white()
                 );
-                std::process::exit(1);
+                defaults
+            } else {
+                repositories
+            };
+
+            // Apply each repository sequentially
+            for (i, repo_source) in repos_to_apply.iter().enumerate() {
+                if repos_to_apply.len() > 1 {
+                    println!(
+                        "\n{} [{}/{}] {}",
+                        "═══".cyan(),
+                        (i + 1).to_string().white().bold(),
+                        repos_to_apply.len().to_string().white().bold(),
+                        repo_source.white().bold()
+                    );
+                }
+                commands::pull_template(repo_source.clone(), tools.clone(), dry_run, force)?;
             }
 
-            // For now, only support single repository (first one)
-            let repo_source = repositories[0].clone();
-            commands::pull_template(repo_source, tools, dry_run, force)?;
+            if repos_to_apply.len() > 1 {
+                println!(
+                    "\n{} {} repositories applied successfully!",
+                    "✓".green().bold(),
+                    repos_to_apply.len().to_string().white().bold()
+                );
+            }
         }
 
         Commands::Detect => {

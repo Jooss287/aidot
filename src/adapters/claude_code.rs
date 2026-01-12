@@ -422,3 +422,208 @@ impl ToolAdapter for ClaudeCodeAdapter {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn create_test_adapter() -> (TempDir, ClaudeCodeAdapter) {
+        let temp_dir = TempDir::new().unwrap();
+        let adapter = ClaudeCodeAdapter::new(temp_dir.path());
+        (temp_dir, adapter)
+    }
+
+    #[test]
+    fn test_adapter_name() {
+        let (_temp_dir, adapter) = create_test_adapter();
+        assert_eq!(adapter.name(), "Claude Code");
+    }
+
+    #[test]
+    fn test_detect_no_claude_dir() {
+        let (temp_dir, _adapter) = create_test_adapter();
+        // Note: detect() also checks for 'claude' command existence,
+        // so this test only verifies no .claude dir doesn't auto-detect.
+        // If claude CLI is installed, this will still return true.
+        let claude_dir = temp_dir.path().join(".claude");
+        assert!(!claude_dir.exists());
+    }
+
+    #[test]
+    fn test_detect_with_claude_dir() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_apply_rules() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/code-style.md".to_string(),
+                    content: "# Code Style Rules".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert_eq!(result.created.len(), 1);
+        assert!(result.created[0].contains("code-style.md"));
+
+        // Verify file was created
+        let created_file = temp_dir.path().join(".claude/rules/code-style.md");
+        assert!(created_file.exists());
+        assert_eq!(fs::read_to_string(created_file).unwrap(), "# Code Style Rules");
+    }
+
+    #[test]
+    fn test_apply_memory_new_file() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            memory: vec![
+                TemplateFile {
+                    relative_path: "memory/context.md".to_string(),
+                    content: "# Project Context".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(result.created.iter().any(|f| f.contains("CLAUDE.md")));
+
+        let claude_md = temp_dir.path().join(".claude/CLAUDE.md");
+        assert!(claude_md.exists());
+    }
+
+    #[test]
+    fn test_apply_memory_concat_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing CLAUDE.md
+        fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
+        fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
+
+        let template_files = TemplateFiles {
+            memory: vec![
+                TemplateFile {
+                    relative_path: "memory/new.md".to_string(),
+                    content: "# New Content".to_string(),
+                },
+            ],
+            memory_strategy: MergeStrategy::Concat,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
+        assert!(content.contains("# Existing Content"));
+        assert!(content.contains("# New Content"));
+    }
+
+    #[test]
+    fn test_apply_memory_replace_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing CLAUDE.md
+        fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
+        fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
+
+        let template_files = TemplateFiles {
+            memory: vec![
+                TemplateFile {
+                    relative_path: "memory/new.md".to_string(),
+                    content: "# New Content Only".to_string(),
+                },
+            ],
+            memory_strategy: MergeStrategy::Replace,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
+        assert!(!content.contains("# Existing Content"));
+        assert!(content.contains("# New Content Only"));
+    }
+
+    #[test]
+    fn test_apply_commands() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            commands: vec![
+                TemplateFile {
+                    relative_path: "commands/build.md".to_string(),
+                    content: "# Build Command".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(result.created.iter().any(|f| f.contains("build.md")));
+
+        let cmd_file = temp_dir.path().join(".claude/commands/build.md");
+        assert!(cmd_file.exists());
+    }
+
+    #[test]
+    fn test_preview_creates() {
+        let (_temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/test.md".to_string(),
+                    content: "# Test".to_string(),
+                },
+            ],
+            memory: vec![
+                TemplateFile {
+                    relative_path: "memory/ctx.md".to_string(),
+                    content: "# Context".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.preview(&template_files, Path::new("."));
+
+        assert!(result.has_changes());
+        assert!(!result.would_create.is_empty());
+    }
+
+    #[test]
+    fn test_preview_updates_existing() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing file
+        fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
+        fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "existing").unwrap();
+
+        let template_files = TemplateFiles {
+            memory: vec![
+                TemplateFile {
+                    relative_path: "memory/new.md".to_string(),
+                    content: "# New".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.preview(&template_files, temp_dir.path());
+
+        assert!(result.would_update.iter().any(|f| f.path.contains("CLAUDE.md")));
+    }
+}

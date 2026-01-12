@@ -126,18 +126,6 @@ impl Config {
         self.save()
     }
 
-    /// Get a repository by name
-    #[allow(dead_code)]
-    pub fn get_repository(&self, name: &str) -> Option<&Repository> {
-        self.repositories.iter().find(|r| r.name == name)
-    }
-
-    /// Get all default repositories
-    #[allow(dead_code)]
-    pub fn get_default_repositories(&self) -> Vec<&Repository> {
-        self.repositories.iter().filter(|r| r.default).collect()
-    }
-
     /// Set default flag for a repository
     pub fn set_default(&mut self, name: &str, default: bool) -> Result<()> {
         let repo = self.repositories.iter_mut()
@@ -196,5 +184,74 @@ mod tests {
 
         assert_eq!(repo.source_type, SourceType::Local);
         assert_eq!(deserialized.source_type, SourceType::Local);
+    }
+
+    #[test]
+    fn test_source_type_default() {
+        let source_type = SourceType::default();
+        assert_eq!(source_type, SourceType::Git);
+    }
+
+    #[test]
+    fn test_history_entry() {
+        let entry = HistoryEntry {
+            project: "/home/user/project".to_string(),
+            timestamp: "2026-01-12T10:00:00Z".to_string(),
+            repositories: vec!["common".to_string(), "team-config".to_string()],
+        };
+
+        let toml = toml::to_string(&entry).unwrap();
+        let deserialized: HistoryEntry = toml::from_str(&toml).unwrap();
+
+        assert_eq!(deserialized.project, "/home/user/project");
+        assert_eq!(deserialized.repositories.len(), 2);
+    }
+
+    #[test]
+    fn test_config_with_repositories() {
+        let mut config = Config::default();
+
+        let repo1 = Repository {
+            name: "repo1".to_string(),
+            url: "https://github.com/test/repo1".to_string(),
+            source_type: SourceType::Git,
+            default: true,
+            cached_at: None,
+            description: None,
+        };
+
+        let repo2 = Repository {
+            name: "repo2".to_string(),
+            url: "/local/path".to_string(),
+            source_type: SourceType::Local,
+            default: false,
+            cached_at: None,
+            description: Some("Local repo".to_string()),
+        };
+
+        config.repositories.push(repo1);
+        config.repositories.push(repo2);
+
+        let toml = toml::to_string_pretty(&config).unwrap();
+        let deserialized: Config = toml::from_str(&toml).unwrap();
+
+        assert_eq!(deserialized.repositories.len(), 2);
+        assert_eq!(deserialized.repositories[0].name, "repo1");
+        assert_eq!(deserialized.repositories[1].source_type, SourceType::Local);
+    }
+
+    #[test]
+    fn test_repository_without_optional_fields() {
+        let toml_str = r#"
+            name = "minimal"
+            url = "https://example.com/repo"
+        "#;
+
+        let repo: Repository = toml::from_str(toml_str).unwrap();
+        assert_eq!(repo.name, "minimal");
+        assert_eq!(repo.source_type, SourceType::Git); // default
+        assert!(!repo.default); // default is false
+        assert!(repo.cached_at.is_none());
+        assert!(repo.description.is_none());
     }
 }

@@ -405,3 +405,158 @@ impl ToolAdapter for CursorAdapter {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn create_test_adapter() -> (TempDir, CursorAdapter) {
+        let temp_dir = TempDir::new().unwrap();
+        let adapter = CursorAdapter::new(temp_dir.path());
+        (temp_dir, adapter)
+    }
+
+    #[test]
+    fn test_adapter_name() {
+        let (_temp_dir, adapter) = create_test_adapter();
+        assert_eq!(adapter.name(), "Cursor");
+    }
+
+    #[test]
+    fn test_detect_no_cursor() {
+        let (temp_dir, _adapter) = create_test_adapter();
+        // Verify no cursor files exist
+        assert!(!temp_dir.path().join(".cursorrules").exists());
+        assert!(!temp_dir.path().join(".cursor").exists());
+    }
+
+    #[test]
+    fn test_detect_with_cursorrules() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::write(temp_dir.path().join(".cursorrules"), "# Rules").unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_detect_with_cursor_dir() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::create_dir_all(temp_dir.path().join(".cursor")).unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_apply_rules() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/code-style.md".to_string(),
+                    content: "# Code Style".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(!result.created.is_empty() || !result.updated.is_empty());
+
+        let cursorrules = temp_dir.path().join(".cursorrules");
+        assert!(cursorrules.exists());
+        let content = fs::read_to_string(cursorrules).unwrap();
+        assert!(content.contains("# Code Style"));
+    }
+
+    #[test]
+    fn test_apply_rules_concat_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing .cursorrules
+        fs::write(temp_dir.path().join(".cursorrules"), "# Existing Rules").unwrap();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/new.md".to_string(),
+                    content: "# New Rules".to_string(),
+                },
+            ],
+            rules_strategy: MergeStrategy::Concat,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(temp_dir.path().join(".cursorrules")).unwrap();
+        assert!(content.contains("# Existing Rules"));
+        assert!(content.contains("# New Rules"));
+    }
+
+    #[test]
+    fn test_apply_rules_replace_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing .cursorrules
+        fs::write(temp_dir.path().join(".cursorrules"), "# Old Rules").unwrap();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/new.md".to_string(),
+                    content: "# New Rules Only".to_string(),
+                },
+            ],
+            rules_strategy: MergeStrategy::Replace,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(temp_dir.path().join(".cursorrules")).unwrap();
+        assert!(!content.contains("# Old Rules"));
+        assert!(content.contains("# New Rules Only"));
+    }
+
+    #[test]
+    fn test_apply_commands() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            commands: vec![
+                TemplateFile {
+                    relative_path: "commands/test.md".to_string(),
+                    content: "# Test Command".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(result.created.iter().any(|f| f.contains("test.md")));
+
+        let cmd_file = temp_dir.path().join(".cursor/commands/test.md");
+        assert!(cmd_file.exists());
+    }
+
+    #[test]
+    fn test_preview() {
+        let (_temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![
+                TemplateFile {
+                    relative_path: "rules/test.md".to_string(),
+                    content: "# Test".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = adapter.preview(&template_files, Path::new("."));
+
+        assert!(result.has_changes());
+    }
+}

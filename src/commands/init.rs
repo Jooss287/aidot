@@ -29,18 +29,6 @@ impl ExtractedFiles {
             && self.skills.is_empty()
             && self.settings.is_empty()
     }
-
-    #[allow(dead_code)]
-    fn total_count(&self) -> usize {
-        self.rules.len()
-            + self.memory.len()
-            + self.commands.len()
-            + self.mcp.len()
-            + self.hooks.len()
-            + self.agents.len()
-            + self.skills.len()
-            + self.settings.len()
-    }
 }
 
 /// Initialize a new template repository

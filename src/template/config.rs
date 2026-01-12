@@ -70,7 +70,6 @@ fn default_merge_strategy() -> MergeStrategy {
 
 impl TemplateConfig {
     /// Load template configuration from .aidot-config.toml
-    #[allow(dead_code)]
     pub fn load(path: &Path) -> Result<Self> {
         let config_file = path.join(".aidot-config.toml");
 
@@ -141,6 +140,7 @@ impl TemplateConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_default_template() {
@@ -164,11 +164,131 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_strategy_default() {
+        let strategy = MergeStrategy::default();
+        assert_eq!(strategy, MergeStrategy::Concat);
+    }
+
+    #[test]
+    fn test_merge_strategy_toml_serialization() {
+        // TOML doesn't support bare enums, so test within a struct
+        let section = DirectorySection {
+            directory: "test/".to_string(),
+            merge_strategy: MergeStrategy::Concat,
+        };
+
+        let toml_str = toml::to_string(&section).unwrap();
+        assert!(toml_str.contains("concat"));
+
+        let section_replace = DirectorySection {
+            directory: "test/".to_string(),
+            merge_strategy: MergeStrategy::Replace,
+        };
+
+        let toml_replace = toml::to_string(&section_replace).unwrap();
+        assert!(toml_replace.contains("replace"));
+
+        // Deserialization
+        let deserialized: DirectorySection = toml::from_str(&toml_str).unwrap();
+        assert_eq!(deserialized.merge_strategy, MergeStrategy::Concat);
+
+        let deserialized_replace: DirectorySection = toml::from_str(&toml_replace).unwrap();
+        assert_eq!(deserialized_replace.merge_strategy, MergeStrategy::Replace);
+    }
+
+    #[test]
     fn test_template_config_serialization() {
         let config = TemplateConfig::default_template("test");
         let toml = toml::to_string_pretty(&config).unwrap();
         let deserialized: TemplateConfig = toml::from_str(&toml).unwrap();
 
         assert_eq!(config.metadata.name, deserialized.metadata.name);
+    }
+
+    #[test]
+    fn test_template_config_all_sections() {
+        let config = TemplateConfig::default_template("full-test");
+
+        assert!(config.rules.is_some());
+        assert!(config.memory.is_some());
+        assert!(config.commands.is_some());
+        assert!(config.mcp.is_some());
+        assert!(config.hooks.is_some());
+        assert!(config.agents.is_some());
+        assert!(config.skills.is_some());
+        assert!(config.settings.is_some());
+
+        // Check merge strategies
+        assert_eq!(config.rules.as_ref().unwrap().merge_strategy, MergeStrategy::Concat);
+        assert_eq!(config.commands.as_ref().unwrap().merge_strategy, MergeStrategy::Replace);
+    }
+
+    #[test]
+    fn test_template_config_save_and_load() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = TemplateConfig::default_template("save-test");
+
+        // Save
+        config.save(temp_dir.path()).unwrap();
+
+        // Verify file exists
+        let config_file = temp_dir.path().join(".aidot-config.toml");
+        assert!(config_file.exists());
+
+        // Load
+        let loaded = TemplateConfig::load(temp_dir.path()).unwrap();
+        assert_eq!(loaded.metadata.name, "save-test");
+        assert_eq!(loaded.metadata.version, "1.0.0");
+    }
+
+    #[test]
+    fn test_template_config_load_missing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = TemplateConfig::load(temp_dir.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rules_section() {
+        let rules = RulesSection {
+            files: vec!["rules/test.md".to_string()],
+            merge_strategy: MergeStrategy::Replace,
+        };
+
+        let toml = toml::to_string(&rules).unwrap();
+        let deserialized: RulesSection = toml::from_str(&toml).unwrap();
+
+        assert_eq!(deserialized.files.len(), 1);
+        assert_eq!(deserialized.merge_strategy, MergeStrategy::Replace);
+    }
+
+    #[test]
+    fn test_directory_section() {
+        let section = DirectorySection {
+            directory: "commands/".to_string(),
+            merge_strategy: MergeStrategy::Concat,
+        };
+
+        let toml = toml::to_string(&section).unwrap();
+        let deserialized: DirectorySection = toml::from_str(&toml).unwrap();
+
+        assert_eq!(deserialized.directory, "commands/");
+        assert_eq!(deserialized.merge_strategy, MergeStrategy::Concat);
+    }
+
+    #[test]
+    fn test_metadata() {
+        let metadata = Metadata {
+            name: "test".to_string(),
+            version: "2.0.0".to_string(),
+            description: Some("Test description".to_string()),
+        };
+
+        let toml = toml::to_string(&metadata).unwrap();
+        let deserialized: Metadata = toml::from_str(&toml).unwrap();
+
+        assert_eq!(deserialized.name, "test");
+        assert_eq!(deserialized.version, "2.0.0");
+        assert_eq!(deserialized.description, Some("Test description".to_string()));
     }
 }

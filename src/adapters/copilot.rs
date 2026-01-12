@@ -404,3 +404,196 @@ impl ToolAdapter for CopilotAdapter {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn create_test_adapter() -> (TempDir, CopilotAdapter) {
+        let temp_dir = TempDir::new().unwrap();
+        let adapter = CopilotAdapter::new(temp_dir.path());
+        (temp_dir, adapter)
+    }
+
+    #[test]
+    fn test_adapter_name() {
+        let (_temp_dir, adapter) = create_test_adapter();
+        assert_eq!(adapter.name(), "GitHub Copilot");
+    }
+
+    #[test]
+    fn test_detect_no_github_dir() {
+        let (temp_dir, _adapter) = create_test_adapter();
+        // Verify no github/copilot files exist
+        assert!(!temp_dir.path().join(".github").exists());
+        assert!(!temp_dir.path().join(".vscode").exists());
+    }
+
+    #[test]
+    fn test_detect_with_github_dir() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::create_dir_all(temp_dir.path().join(".github")).unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_detect_with_vscode_dir() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::create_dir_all(temp_dir.path().join(".vscode")).unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_detect_with_copilot_instructions() {
+        let (temp_dir, adapter) = create_test_adapter();
+        fs::create_dir_all(temp_dir.path().join(".github")).unwrap();
+        fs::write(
+            temp_dir.path().join(".github/copilot-instructions.md"),
+            "# Instructions",
+        )
+        .unwrap();
+        assert!(adapter.detect());
+    }
+
+    #[test]
+    fn test_apply_rules() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![TemplateFile {
+                relative_path: "rules/code-style.md".to_string(),
+                content: "# Code Style".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(!result.created.is_empty() || !result.updated.is_empty());
+
+        let instructions = temp_dir.path().join(".github/copilot-instructions.md");
+        assert!(instructions.exists());
+        let content = fs::read_to_string(instructions).unwrap();
+        assert!(content.contains("# Code Style"));
+    }
+
+    #[test]
+    fn test_apply_rules_concat_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing instructions
+        fs::create_dir_all(temp_dir.path().join(".github")).unwrap();
+        fs::write(
+            temp_dir.path().join(".github/copilot-instructions.md"),
+            "# Existing Instructions",
+        )
+        .unwrap();
+
+        let template_files = TemplateFiles {
+            rules: vec![TemplateFile {
+                relative_path: "rules/new.md".to_string(),
+                content: "# New Rules".to_string(),
+            }],
+            rules_strategy: MergeStrategy::Concat,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(
+            temp_dir.path().join(".github/copilot-instructions.md"),
+        )
+        .unwrap();
+        assert!(content.contains("# Existing Instructions"));
+        assert!(content.contains("# New Rules"));
+    }
+
+    #[test]
+    fn test_apply_rules_replace_strategy() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        // Create existing instructions
+        fs::create_dir_all(temp_dir.path().join(".github")).unwrap();
+        fs::write(
+            temp_dir.path().join(".github/copilot-instructions.md"),
+            "# Old Instructions",
+        )
+        .unwrap();
+
+        let template_files = TemplateFiles {
+            rules: vec![TemplateFile {
+                relative_path: "rules/new.md".to_string(),
+                content: "# New Only".to_string(),
+            }],
+            rules_strategy: MergeStrategy::Replace,
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let content = fs::read_to_string(
+            temp_dir.path().join(".github/copilot-instructions.md"),
+        )
+        .unwrap();
+        assert!(!content.contains("# Old Instructions"));
+        assert!(content.contains("# New Only"));
+    }
+
+    #[test]
+    fn test_apply_commands() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            commands: vec![TemplateFile {
+                relative_path: "commands/build.md".to_string(),
+                content: "# Build Command".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        assert!(result.created.iter().any(|f: &String| f.contains("build.prompt.md")));
+
+        let prompt_file = temp_dir.path().join(".github/prompts/build.prompt.md");
+        assert!(prompt_file.exists());
+    }
+
+    #[test]
+    fn test_preview() {
+        let (_temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            rules: vec![TemplateFile {
+                relative_path: "rules/test.md".to_string(),
+                content: "# Test".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let result = adapter.preview(&template_files, Path::new("."));
+
+        assert!(result.has_changes());
+    }
+
+    #[test]
+    fn test_apply_memory() {
+        let (temp_dir, adapter) = create_test_adapter();
+
+        let template_files = TemplateFiles {
+            memory: vec![TemplateFile {
+                relative_path: "memory/context.md".to_string(),
+                content: "# Project Context".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+
+        let instructions = temp_dir.path().join(".github/copilot-instructions.md");
+        assert!(instructions.exists());
+        let content = fs::read_to_string(instructions).unwrap();
+        assert!(content.contains("# Project Context"));
+    }
+}
