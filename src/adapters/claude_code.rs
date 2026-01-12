@@ -1,5 +1,6 @@
 use super::traits::{ApplyResult, PreviewResult, TemplateFile, TemplateFiles, ToolAdapter};
 use crate::error::Result;
+use crate::template::config::MergeStrategy;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -54,15 +55,15 @@ impl ClaudeCodeAdapter {
         Ok(())
     }
 
-    /// Apply memory files: memory/*.md → .claude/CLAUDE.md (merged)
-    fn apply_memory(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    /// Apply memory files: memory/*.md → .claude/CLAUDE.md (merged or replaced)
+    fn apply_memory(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
 
         let claude_md = self.claude_dir().join("CLAUDE.md");
 
-        // Merge all memory files
+        // Merge all memory files from template
         let mut content = String::new();
         for (i, file) in files.iter().enumerate() {
             if i > 0 {
@@ -72,9 +73,16 @@ impl ClaudeCodeAdapter {
         }
 
         let action = if claude_md.exists() {
-            // Append to existing file
-            let existing = fs::read_to_string(&claude_md)?;
-            content = format!("{}\n\n---\n\n{}", existing, content);
+            match strategy {
+                MergeStrategy::Concat => {
+                    // Append to existing file
+                    let existing = fs::read_to_string(&claude_md)?;
+                    content = format!("{}\n\n---\n\n{}", existing, content);
+                }
+                MergeStrategy::Replace => {
+                    // Replace entirely - content stays as is
+                }
+            }
             "updated"
         } else {
             "created"
@@ -112,19 +120,27 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply MCP configs: mcp/*.json → .claude/settings.local.json (mcpServers section)
-    fn apply_mcp(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_mcp(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
 
         let settings_file = self.claude_dir().join("settings.local.json");
 
-        // Read existing settings or create new
-        let mut settings: serde_json::Value = if settings_file.exists() {
-            let content = fs::read_to_string(&settings_file)?;
-            serde_json::from_str(&content)?
-        } else {
-            serde_json::json!({})
+        // Read existing settings or create new based on strategy
+        let mut settings: serde_json::Value = match strategy {
+            MergeStrategy::Concat => {
+                if settings_file.exists() {
+                    let content = fs::read_to_string(&settings_file)?;
+                    serde_json::from_str(&content)?
+                } else {
+                    serde_json::json!({})
+                }
+            }
+            MergeStrategy::Replace => {
+                // Start fresh with empty object
+                serde_json::json!({})
+            }
         };
 
         // Ensure mcpServers object exists
@@ -216,20 +232,28 @@ impl ClaudeCodeAdapter {
         Ok(())
     }
 
-    /// Apply settings: settings/*.json → .claude/settings.local.json (merged)
-    fn apply_settings(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    /// Apply settings: settings/*.json → .claude/settings.local.json (merged or replaced)
+    fn apply_settings(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
 
         let settings_file = self.claude_dir().join("settings.local.json");
 
-        // Read existing settings or create new
-        let mut settings: serde_json::Value = if settings_file.exists() {
-            let content = fs::read_to_string(&settings_file)?;
-            serde_json::from_str(&content)?
-        } else {
-            serde_json::json!({})
+        // Read existing settings or create new based on strategy
+        let mut settings: serde_json::Value = match strategy {
+            MergeStrategy::Concat => {
+                if settings_file.exists() {
+                    let content = fs::read_to_string(&settings_file)?;
+                    serde_json::from_str(&content)?
+                } else {
+                    serde_json::json!({})
+                }
+            }
+            MergeStrategy::Replace => {
+                // Start fresh with empty object
+                serde_json::json!({})
+            }
         };
 
         // Merge all settings files
@@ -289,15 +313,15 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         let mut result = ApplyResult::new();
 
-        // Apply each section
+        // Apply each section with their merge strategies
         self.apply_rules(&template_files.rules, &mut result)?;
-        self.apply_memory(&template_files.memory, &mut result)?;
+        self.apply_memory(&template_files.memory, &template_files.memory_strategy, &mut result)?;
         self.apply_commands(&template_files.commands, &mut result)?;
-        self.apply_mcp(&template_files.mcp, &mut result)?;
+        self.apply_mcp(&template_files.mcp, &template_files.mcp_strategy, &mut result)?;
         self.apply_hooks(&template_files.hooks, &mut result)?;
         self.apply_agents(&template_files.agents, &mut result)?;
         self.apply_skills(&template_files.skills, &mut result)?;
-        self.apply_settings(&template_files.settings, &mut result)?;
+        self.apply_settings(&template_files.settings, &template_files.settings_strategy, &mut result)?;
 
         Ok(result)
     }

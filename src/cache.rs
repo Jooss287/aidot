@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::git;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Get the cache path for a repository
 pub fn get_cache_path(repo_name: &str) -> Result<PathBuf> {

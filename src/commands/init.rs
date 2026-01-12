@@ -30,6 +30,7 @@ impl ExtractedFiles {
             && self.settings.is_empty()
     }
 
+    #[allow(dead_code)]
     fn total_count(&self) -> usize {
         self.rules.len()
             + self.memory.len()

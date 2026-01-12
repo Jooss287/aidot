@@ -217,12 +217,7 @@ fn run() -> Result<()> {
         },
 
         Commands::Diff { repository } => {
-            println!(
-                "{} {}",
-                "Diff command".yellow(),
-                "(not yet implemented)".dimmed()
-            );
-            println!("  {} {}", "Repository:".dimmed(), repository.white());
+            commands::show_diff(repository)?;
         }
     }
 

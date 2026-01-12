@@ -56,9 +56,10 @@ pub struct DirectorySection {
     pub merge_strategy: MergeStrategy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MergeStrategy {
+    #[default]
     Concat,
     Replace,
 }

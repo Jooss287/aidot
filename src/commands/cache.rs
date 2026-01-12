@@ -125,6 +125,7 @@ pub fn clear_cache() -> Result<()> {
 }
 
 /// List all cached repositories
+#[allow(dead_code)]
 pub fn list_cache() -> Result<()> {
     let caches = cache::list_caches()?;
 

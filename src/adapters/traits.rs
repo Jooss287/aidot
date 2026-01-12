@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::template::config::MergeStrategy;
 use std::path::Path;
 
 /// Represents a template file to be converted
@@ -43,7 +44,7 @@ pub trait ToolAdapter {
     ) -> PreviewResult;
 }
 
-/// Template files organized by section
+/// Template files organized by section with merge strategies
 #[derive(Debug, Default)]
 pub struct TemplateFiles {
     pub rules: Vec<TemplateFile>,
@@ -54,6 +55,16 @@ pub struct TemplateFiles {
     pub agents: Vec<TemplateFile>,
     pub skills: Vec<TemplateFile>,
     pub settings: Vec<TemplateFile>,
+
+    // Merge strategies for each section
+    pub rules_strategy: MergeStrategy,
+    pub memory_strategy: MergeStrategy,
+    pub commands_strategy: MergeStrategy,
+    pub mcp_strategy: MergeStrategy,
+    pub hooks_strategy: MergeStrategy,
+    pub agents_strategy: MergeStrategy,
+    pub skills_strategy: MergeStrategy,
+    pub settings_strategy: MergeStrategy,
 }
 
 /// Result of applying a template
@@ -90,6 +101,7 @@ impl ApplyResult {
     }
 
     /// Check if any changes would be made
+    #[allow(dead_code)]
     pub fn has_changes(&self) -> bool {
         !self.created.is_empty() || !self.updated.is_empty()
     }

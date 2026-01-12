@@ -115,7 +115,7 @@ pub enum Commands {
 
     /// Show diff between template and current config
     Diff {
-        /// Repository name
+        /// Repository name, local path, or Git URL
         #[arg(value_name = "REPO")]
         repository: String,
     },

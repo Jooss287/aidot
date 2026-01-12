@@ -14,43 +14,51 @@ pub fn parse_template(template_dir: &Path) -> Result<(TemplateConfig, TemplateFi
     let mut template_files = TemplateFiles::default();
 
     // Parse rules
-    if config.rules.is_some() {
+    if let Some(ref rules_section) = config.rules {
         template_files.rules = parse_directory(template_dir, "rules")?;
+        template_files.rules_strategy = rules_section.merge_strategy.clone();
     }
 
     // Parse memory
-    if config.memory.is_some() {
+    if let Some(ref memory_section) = config.memory {
         template_files.memory = parse_directory(template_dir, "memory")?;
+        template_files.memory_strategy = memory_section.merge_strategy.clone();
     }
 
     // Parse commands
-    if config.commands.is_some() {
+    if let Some(ref commands_section) = config.commands {
         template_files.commands = parse_directory(template_dir, "commands")?;
+        template_files.commands_strategy = commands_section.merge_strategy.clone();
     }
 
     // Parse MCP
-    if config.mcp.is_some() {
+    if let Some(ref mcp_section) = config.mcp {
         template_files.mcp = parse_directory(template_dir, "mcp")?;
+        template_files.mcp_strategy = mcp_section.merge_strategy.clone();
     }
 
     // Parse hooks
-    if config.hooks.is_some() {
+    if let Some(ref hooks_section) = config.hooks {
         template_files.hooks = parse_directory(template_dir, "hooks")?;
+        template_files.hooks_strategy = hooks_section.merge_strategy.clone();
     }
 
     // Parse agents
-    if config.agents.is_some() {
+    if let Some(ref agents_section) = config.agents {
         template_files.agents = parse_directory(template_dir, "agents")?;
+        template_files.agents_strategy = agents_section.merge_strategy.clone();
     }
 
     // Parse skills
-    if config.skills.is_some() {
+    if let Some(ref skills_section) = config.skills {
         template_files.skills = parse_directory(template_dir, "skills")?;
+        template_files.skills_strategy = skills_section.merge_strategy.clone();
     }
 
     // Parse settings
-    if config.settings.is_some() {
+    if let Some(ref settings_section) = config.settings {
         template_files.settings = parse_directory(template_dir, "settings")?;
+        template_files.settings_strategy = settings_section.merge_strategy.clone();
     }
 
     Ok((config, template_files))
