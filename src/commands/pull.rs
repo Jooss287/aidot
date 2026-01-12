@@ -102,7 +102,7 @@ pub fn pull_template(
                 tool.name().white().bold()
             );
 
-            let preview = tool.preview(&template_files, &target_dir);
+            let preview = tool.preview(&template_files, &target_dir, conflict_mode);
 
             if !preview.has_changes() {
                 println!("  {} No changes would be made", "ℹ".blue());

@@ -340,15 +340,21 @@ impl ToolAdapter for CopilotAdapter {
         &self,
         template_files: &TemplateFiles,
         _target_dir: &Path,
+        conflict_mode: ConflictMode,
     ) -> PreviewResult {
         let mut result = PreviewResult::new();
         let instructions_file = self.copilot_instructions_file();
         let mcp_file = self.vscode_dir().join("mcp.json");
+        let skip_existing = conflict_mode == ConflictMode::Skip;
 
         // Rules → .github/copilot-instructions.md
         if !template_files.rules.is_empty() {
             if instructions_file.exists() {
-                result.add_would_update(".github/copilot-instructions.md".to_string(), "rules".to_string());
+                if skip_existing {
+                    result.add_would_skip(".github/copilot-instructions.md".to_string());
+                } else {
+                    result.add_would_update(".github/copilot-instructions.md".to_string(), "rules".to_string());
+                }
             } else {
                 result.add_would_create(".github/copilot-instructions.md".to_string(), "rules".to_string());
             }
@@ -356,7 +362,11 @@ impl ToolAdapter for CopilotAdapter {
 
         // Memory → .github/copilot-instructions.md (appended)
         if !template_files.memory.is_empty() {
-            result.add_would_update(".github/copilot-instructions.md".to_string(), "memory".to_string());
+            if instructions_file.exists() && skip_existing {
+                result.add_would_skip(".github/copilot-instructions.md".to_string());
+            } else {
+                result.add_would_update(".github/copilot-instructions.md".to_string(), "memory".to_string());
+            }
         }
 
         // Commands → .github/prompts/*.prompt.md
@@ -370,7 +380,11 @@ impl ToolAdapter for CopilotAdapter {
             let target = format!(".github/prompts/{}", prompt_name);
             let target_path = self.github_dir().join("prompts").join(&prompt_name);
             if target_path.exists() {
-                result.add_would_update(target, "commands".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "commands".to_string());
+                }
             } else {
                 result.add_would_create(target, "commands".to_string());
             }
@@ -379,7 +393,11 @@ impl ToolAdapter for CopilotAdapter {
         // MCP → .vscode/mcp.json
         if !template_files.mcp.is_empty() {
             if mcp_file.exists() {
-                result.add_would_update(".vscode/mcp.json".to_string(), "mcp".to_string());
+                if skip_existing {
+                    result.add_would_skip(".vscode/mcp.json".to_string());
+                } else {
+                    result.add_would_update(".vscode/mcp.json".to_string(), "mcp".to_string());
+                }
             } else {
                 result.add_would_create(".vscode/mcp.json".to_string(), "mcp".to_string());
             }
@@ -396,7 +414,11 @@ impl ToolAdapter for CopilotAdapter {
             let target = format!(".github/agents/{}", agent_name);
             let target_path = self.github_dir().join("agents").join(&agent_name);
             if target_path.exists() {
-                result.add_would_update(target, "agents".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "agents".to_string());
+                }
             } else {
                 result.add_would_create(target, "agents".to_string());
             }
@@ -408,7 +430,11 @@ impl ToolAdapter for CopilotAdapter {
             let target = format!(".github/skills/{}", filename);
             let target_path = self.github_dir().join("skills").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "skills".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "skills".to_string());
+                }
             } else {
                 result.add_would_create(target, "skills".to_string());
             }
@@ -585,7 +611,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, Path::new("."));
+        let result = adapter.preview(&template_files, Path::new("."), ConflictMode::Force);
 
         assert!(result.has_changes());
     }

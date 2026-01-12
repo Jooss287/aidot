@@ -316,17 +316,23 @@ impl ToolAdapter for ClaudeCodeAdapter {
         &self,
         template_files: &TemplateFiles,
         _target_dir: &Path,
+        conflict_mode: ConflictMode,
     ) -> PreviewResult {
         let mut result = PreviewResult::new();
         let claude_md = self.claude_dir().join("CLAUDE.md");
         let settings_file = self.claude_dir().join("settings.local.json");
+        let skip_existing = conflict_mode == ConflictMode::Skip;
 
         // Rules
         for file in &template_files.rules {
             let target = format!(".claude/rules/{}", file.relative_path.replace("rules/", ""));
             let target_path = self.claude_dir().join("rules").join(file.relative_path.replace("rules/", ""));
             if target_path.exists() {
-                result.add_would_update(target, "rules".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "rules".to_string());
+                }
             } else {
                 result.add_would_create(target, "rules".to_string());
             }
@@ -335,7 +341,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
         // Memory
         if !template_files.memory.is_empty() {
             if claude_md.exists() {
-                result.add_would_update(".claude/CLAUDE.md".to_string(), "memory".to_string());
+                if skip_existing {
+                    result.add_would_skip(".claude/CLAUDE.md".to_string());
+                } else {
+                    result.add_would_update(".claude/CLAUDE.md".to_string(), "memory".to_string());
+                }
             } else {
                 result.add_would_create(".claude/CLAUDE.md".to_string(), "memory".to_string());
             }
@@ -347,7 +357,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let target = format!(".claude/commands/{}", filename);
             let target_path = self.claude_dir().join("commands").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "commands".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "commands".to_string());
+                }
             } else {
                 result.add_would_create(target, "commands".to_string());
             }
@@ -356,7 +370,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
         // MCP
         if !template_files.mcp.is_empty() {
             if settings_file.exists() {
-                result.add_would_update(".claude/settings.local.json".to_string(), "mcp".to_string());
+                if skip_existing {
+                    result.add_would_skip(".claude/settings.local.json".to_string());
+                } else {
+                    result.add_would_update(".claude/settings.local.json".to_string(), "mcp".to_string());
+                }
             } else {
                 result.add_would_create(".claude/settings.local.json".to_string(), "mcp".to_string());
             }
@@ -366,7 +384,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
         if !template_files.hooks.is_empty() {
             let hooks_file = self.claude_dir().join("hooks.json");
             if hooks_file.exists() {
-                result.add_would_update(".claude/hooks.json".to_string(), "hooks".to_string());
+                if skip_existing {
+                    result.add_would_skip(".claude/hooks.json".to_string());
+                } else {
+                    result.add_would_update(".claude/hooks.json".to_string(), "hooks".to_string());
+                }
             } else {
                 result.add_would_create(".claude/hooks.json".to_string(), "hooks".to_string());
             }
@@ -378,7 +400,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let target = format!(".claude/agents/{}", filename);
             let target_path = self.claude_dir().join("agents").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "agents".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "agents".to_string());
+                }
             } else {
                 result.add_would_create(target, "agents".to_string());
             }
@@ -390,7 +416,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let target = format!(".claude/skills/{}", filename);
             let target_path = self.claude_dir().join("skills").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "skills".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "skills".to_string());
+                }
             } else {
                 result.add_would_create(target, "skills".to_string());
             }
@@ -399,7 +429,11 @@ impl ToolAdapter for ClaudeCodeAdapter {
         // Settings
         if !template_files.settings.is_empty() {
             if settings_file.exists() {
-                result.add_would_update(".claude/settings.local.json".to_string(), "settings".to_string());
+                if skip_existing {
+                    result.add_would_skip(".claude/settings.local.json".to_string());
+                } else {
+                    result.add_would_update(".claude/settings.local.json".to_string(), "settings".to_string());
+                }
             } else {
                 result.add_would_create(".claude/settings.local.json".to_string(), "settings".to_string());
             }
@@ -584,7 +618,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, Path::new("."));
+        let result = adapter.preview(&template_files, Path::new("."), ConflictMode::Force);
 
         assert!(result.has_changes());
         assert!(!result.would_create.is_empty());
@@ -608,7 +642,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, temp_dir.path());
+        let result = adapter.preview(&template_files, temp_dir.path(), ConflictMode::Force);
 
         assert!(result.would_update.iter().any(|f| f.path.contains("CLAUDE.md")));
     }

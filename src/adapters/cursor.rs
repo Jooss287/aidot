@@ -339,15 +339,21 @@ impl ToolAdapter for CursorAdapter {
         &self,
         template_files: &TemplateFiles,
         _target_dir: &Path,
+        conflict_mode: ConflictMode,
     ) -> PreviewResult {
         let mut result = PreviewResult::new();
         let cursorrules = self.cursorrules_file();
         let mcp_file = self.cursor_dir().join("mcp.json");
+        let skip_existing = conflict_mode == ConflictMode::Skip;
 
         // Rules → .cursorrules
         if !template_files.rules.is_empty() {
             if cursorrules.exists() {
-                result.add_would_update(".cursorrules".to_string(), "rules".to_string());
+                if skip_existing {
+                    result.add_would_skip(".cursorrules".to_string());
+                } else {
+                    result.add_would_update(".cursorrules".to_string(), "rules".to_string());
+                }
             } else {
                 result.add_would_create(".cursorrules".to_string(), "rules".to_string());
             }
@@ -355,7 +361,11 @@ impl ToolAdapter for CursorAdapter {
 
         // Memory → .cursorrules (appended)
         if !template_files.memory.is_empty() {
-            result.add_would_update(".cursorrules".to_string(), "memory".to_string());
+            if cursorrules.exists() && skip_existing {
+                result.add_would_skip(".cursorrules".to_string());
+            } else {
+                result.add_would_update(".cursorrules".to_string(), "memory".to_string());
+            }
         }
 
         // Commands
@@ -364,7 +374,11 @@ impl ToolAdapter for CursorAdapter {
             let target = format!(".cursor/commands/{}", filename);
             let target_path = self.cursor_dir().join("commands").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "commands".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "commands".to_string());
+                }
             } else {
                 result.add_would_create(target, "commands".to_string());
             }
@@ -373,7 +387,11 @@ impl ToolAdapter for CursorAdapter {
         // MCP
         if !template_files.mcp.is_empty() {
             if mcp_file.exists() {
-                result.add_would_update(".cursor/mcp.json".to_string(), "mcp".to_string());
+                if skip_existing {
+                    result.add_would_skip(".cursor/mcp.json".to_string());
+                } else {
+                    result.add_would_update(".cursor/mcp.json".to_string(), "mcp".to_string());
+                }
             } else {
                 result.add_would_create(".cursor/mcp.json".to_string(), "mcp".to_string());
             }
@@ -383,7 +401,11 @@ impl ToolAdapter for CursorAdapter {
         if !template_files.hooks.is_empty() {
             let hooks_file = self.cursor_dir().join("hooks.json");
             if hooks_file.exists() {
-                result.add_would_update(".cursor/hooks.json".to_string(), "hooks".to_string());
+                if skip_existing {
+                    result.add_would_skip(".cursor/hooks.json".to_string());
+                } else {
+                    result.add_would_update(".cursor/hooks.json".to_string(), "hooks".to_string());
+                }
             } else {
                 result.add_would_create(".cursor/hooks.json".to_string(), "hooks".to_string());
             }
@@ -395,7 +417,11 @@ impl ToolAdapter for CursorAdapter {
             let target = format!(".cursor/agents/{}", filename);
             let target_path = self.cursor_dir().join("agents").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "agents".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "agents".to_string());
+                }
             } else {
                 result.add_would_create(target, "agents".to_string());
             }
@@ -407,7 +433,11 @@ impl ToolAdapter for CursorAdapter {
             let target = format!(".cursor/skills/{}", filename);
             let target_path = self.cursor_dir().join("skills").join(&filename);
             if target_path.exists() {
-                result.add_would_update(target, "skills".to_string());
+                if skip_existing {
+                    result.add_would_skip(target);
+                } else {
+                    result.add_would_update(target, "skills".to_string());
+                }
             } else {
                 result.add_would_create(target, "skills".to_string());
             }
@@ -566,7 +596,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, Path::new("."));
+        let result = adapter.preview(&template_files, Path::new("."), ConflictMode::Force);
 
         assert!(result.has_changes());
     }

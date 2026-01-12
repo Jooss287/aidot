@@ -151,6 +151,7 @@ pub trait ToolAdapter {
         &self,
         template_files: &TemplateFiles,
         target_dir: &Path,
+        conflict_mode: ConflictMode,
     ) -> PreviewResult;
 }
 
@@ -207,11 +208,6 @@ impl ApplyResult {
 
     pub fn add_skipped(&mut self, path: String) {
         self.skipped.push(path);
-    }
-
-    /// Check if any changes would be made
-    pub fn has_changes(&self) -> bool {
-        !self.created.is_empty() || !self.updated.is_empty()
     }
 }
 
@@ -289,10 +285,11 @@ mod tests {
     #[test]
     fn test_apply_result() {
         let mut result = ApplyResult::new();
-        assert!(!result.has_changes());
+        assert!(result.created.is_empty());
+        assert!(result.updated.is_empty());
+        assert!(result.skipped.is_empty());
 
         result.add_created("file1.md".to_string());
-        assert!(result.has_changes());
         assert_eq!(result.created.len(), 1);
 
         result.add_updated("file2.md".to_string());
