@@ -4,5 +4,5 @@ pub mod claude_code;
 pub mod cursor;
 pub mod copilot;
 
-pub use traits::ToolAdapter;
+pub use traits::{ToolAdapter, ConflictMode};
 pub use detector::detect_tools;

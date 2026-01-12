@@ -11,6 +11,116 @@ pub struct TemplateFile {
     pub content: String,
 }
 
+/// How to handle file conflicts during apply
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ConflictMode {
+    /// Overwrite existing files without asking
+    Force,
+    /// Skip existing files without asking
+    Skip,
+    /// Ask user for each conflict (default)
+    #[default]
+    Ask,
+}
+
+/// User's decision for a single conflict
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConflictDecision {
+    /// Overwrite this file
+    Overwrite,
+    /// Skip this file
+    Skip,
+    /// Overwrite all remaining files
+    OverwriteAll,
+    /// Skip all remaining files
+    SkipAll,
+}
+
+impl ConflictMode {
+    /// Resolve how to handle a conflict for a specific file.
+    /// Returns (should_write, updated_mode) where updated_mode may change to Force/Skip
+    /// if user chose "all" option.
+    pub fn resolve_conflict(&self, file_path: &str) -> (bool, ConflictMode) {
+        match self {
+            ConflictMode::Force => (true, ConflictMode::Force),
+            ConflictMode::Skip => (false, ConflictMode::Skip),
+            ConflictMode::Ask => {
+                let decision = Self::ask_user(file_path);
+                match decision {
+                    ConflictDecision::Overwrite => (true, ConflictMode::Ask),
+                    ConflictDecision::Skip => (false, ConflictMode::Ask),
+                    ConflictDecision::OverwriteAll => (true, ConflictMode::Force),
+                    ConflictDecision::SkipAll => (false, ConflictMode::Skip),
+                }
+            }
+        }
+    }
+
+    /// Ask user what to do with a conflicting file
+    fn ask_user(file_path: &str) -> ConflictDecision {
+        use colored::Colorize;
+        use std::io::{self, Write};
+
+        loop {
+            print!(
+                "  {} '{}' {} [o]verwrite / [s]kip / [O]verwrite all / [S]kip all? ",
+                "Conflict:".yellow(),
+                file_path,
+                "already exists.".dimmed()
+            );
+            io::stdout().flush().unwrap();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_err() {
+                // If we can't read input, default to skip
+                return ConflictDecision::Skip;
+            }
+
+            match input.trim() {
+                "o" | "y" | "yes" => return ConflictDecision::Overwrite,
+                "s" | "n" | "no" => return ConflictDecision::Skip,
+                "O" | "a" | "all" => return ConflictDecision::OverwriteAll,
+                "S" | "N" => return ConflictDecision::SkipAll,
+                "" => return ConflictDecision::Skip, // Default to skip on Enter
+                _ => {
+                    println!("  {} Please enter 'o', 's', 'O', or 'S'", "?".yellow());
+                }
+            }
+        }
+    }
+}
+
+/// Helper to write a file with conflict resolution
+/// Returns updated ConflictMode (may change if user chose "all" option)
+pub fn write_with_conflict(
+    target_path: &Path,
+    content: &str,
+    mode: ConflictMode,
+    result: &mut ApplyResult,
+    display_path: &str,
+) -> std::io::Result<ConflictMode> {
+    use std::fs;
+
+    if target_path.exists() {
+        let (should_write, new_mode) = mode.resolve_conflict(display_path);
+        if should_write {
+            fs::write(target_path, content)?;
+            result.add_updated(display_path.to_string());
+        } else {
+            result.add_skipped(display_path.to_string());
+        }
+        Ok(new_mode)
+    } else {
+        // Create parent directories if needed
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(target_path, content)?;
+        result.add_created(display_path.to_string());
+        Ok(mode)
+    }
+}
+
 /// Trait for LLM tool adapters
 pub trait ToolAdapter {
     /// Get the name of the tool (e.g., "Claude Code", "Cursor")
@@ -28,12 +138,12 @@ pub trait ToolAdapter {
     ///   - "commands" -> Vec<TemplateFile>
     ///   - etc.
     /// * `target_dir` - Project directory where files should be written
-    /// * `force` - Overwrite existing files without asking
+    /// * `conflict_mode` - How to handle existing files
     fn apply(
         &self,
         template_files: &TemplateFiles,
         target_dir: &Path,
-        force: bool,
+        conflict_mode: ConflictMode,
     ) -> Result<ApplyResult>;
 
     /// Preview what changes would be made (for dry-run mode)
@@ -95,13 +205,11 @@ impl ApplyResult {
         self.updated.push(path);
     }
 
-    #[allow(dead_code)]
     pub fn add_skipped(&mut self, path: String) {
         self.skipped.push(path);
     }
 
     /// Check if any changes would be made
-    #[allow(dead_code)]
     pub fn has_changes(&self) -> bool {
         !self.created.is_empty() || !self.updated.is_empty()
     }
@@ -141,7 +249,6 @@ impl PreviewResult {
         self.would_update.push(PreviewFile { path, section });
     }
 
-    #[allow(dead_code)]
     pub fn add_would_skip(&mut self, path: String) {
         self.would_skip.push(path);
     }
@@ -211,5 +318,21 @@ mod tests {
 
         result.add_would_skip("file3.md".to_string());
         assert_eq!(result.would_skip.len(), 1);
+    }
+
+    #[test]
+    fn test_conflict_mode_force() {
+        let mode = ConflictMode::Force;
+        let (should_write, new_mode) = mode.resolve_conflict("test.md");
+        assert!(should_write);
+        assert_eq!(new_mode, ConflictMode::Force);
+    }
+
+    #[test]
+    fn test_conflict_mode_skip() {
+        let mode = ConflictMode::Skip;
+        let (should_write, new_mode) = mode.resolve_conflict("test.md");
+        assert!(!should_write);
+        assert_eq!(new_mode, ConflictMode::Skip);
     }
 }

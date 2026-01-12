@@ -1,4 +1,4 @@
-use super::traits::{ApplyResult, PreviewResult, TemplateFile, TemplateFiles, ToolAdapter};
+use super::traits::{ApplyResult, ConflictMode, PreviewResult, TemplateFile, TemplateFiles, ToolAdapter, write_with_conflict};
 use crate::error::Result;
 use crate::template::config::MergeStrategy;
 use std::fs;
@@ -31,7 +31,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply rules files: rules/*.md → .claude/rules/
-    fn apply_rules(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_rules(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -40,23 +40,18 @@ impl ClaudeCodeAdapter {
         fs::create_dir_all(&rules_dir)?;
 
         for file in files {
-            // Preserve directory structure
-            let target_path = rules_dir.join(&file.relative_path.replace("rules/", ""));
+            let relative = file.relative_path.replace("rules/", "");
+            let target_path = rules_dir.join(&relative);
+            let display_path = format!(".claude/rules/{}", relative);
 
-            // Create parent directories if needed
-            if let Some(parent) = target_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            fs::write(&target_path, &file.content)?;
-            result.add_created(format!(".claude/rules/{}", file.relative_path.replace("rules/", "")));
+            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
         }
 
         Ok(())
     }
 
     /// Apply memory files: memory/*.md → .claude/CLAUDE.md (merged or replaced)
-    fn apply_memory(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
+    fn apply_memory(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -72,35 +67,30 @@ impl ClaudeCodeAdapter {
             content.push_str(&file.content);
         }
 
-        let action = if claude_md.exists() {
+        if claude_md.exists() {
             match strategy {
                 MergeStrategy::Concat => {
-                    // Append to existing file
                     let existing = fs::read_to_string(&claude_md)?;
                     content = format!("{}\n\n---\n\n{}", existing, content);
+                    // For concat, we always update (merge) - no conflict
+                    fs::write(&claude_md, content)?;
+                    result.add_updated(".claude/CLAUDE.md".to_string());
                 }
                 MergeStrategy::Replace => {
-                    // Replace entirely - content stays as is
+                    // For replace, check conflict
+                    *mode = write_with_conflict(&claude_md, &content, *mode, result, ".claude/CLAUDE.md")?;
                 }
             }
-            "updated"
         } else {
-            "created"
-        };
-
-        fs::write(&claude_md, content)?;
-
-        if action == "created" {
+            fs::write(&claude_md, content)?;
             result.add_created(".claude/CLAUDE.md".to_string());
-        } else {
-            result.add_updated(".claude/CLAUDE.md".to_string());
         }
 
         Ok(())
     }
 
     /// Apply commands: commands/*.md → .claude/commands/
-    fn apply_commands(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_commands(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -111,16 +101,16 @@ impl ClaudeCodeAdapter {
         for file in files {
             let filename = file.relative_path.replace("commands/", "");
             let target_path = commands_dir.join(&filename);
+            let display_path = format!(".claude/commands/{}", filename);
 
-            fs::write(&target_path, &file.content)?;
-            result.add_created(format!(".claude/commands/{}", filename));
+            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
         }
 
         Ok(())
     }
 
     /// Apply MCP configs: mcp/*.json → .claude/settings.local.json (mcpServers section)
-    fn apply_mcp(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
+    fn apply_mcp(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -159,15 +149,14 @@ impl ClaudeCodeAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&settings)?;
-        fs::write(&settings_file, json_str)?;
-
-        result.add_updated(".claude/settings.local.json".to_string());
+        // MCP configs are always merged, so treat as update
+        *mode = write_with_conflict(&settings_file, &json_str, *mode, result, ".claude/settings.local.json")?;
 
         Ok(())
     }
 
     /// Apply hooks: hooks/*.json → .claude/hooks.json
-    fn apply_hooks(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_hooks(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -185,15 +174,13 @@ impl ClaudeCodeAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&serde_json::Value::Object(hooks))?;
-        fs::write(&hooks_file, json_str)?;
-
-        result.add_created(".claude/hooks.json".to_string());
+        *mode = write_with_conflict(&hooks_file, &json_str, *mode, result, ".claude/hooks.json")?;
 
         Ok(())
     }
 
     /// Apply agents: agents/*.md → .claude/agents/
-    fn apply_agents(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_agents(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -204,16 +191,16 @@ impl ClaudeCodeAdapter {
         for file in files {
             let filename = file.relative_path.replace("agents/", "");
             let target_path = agents_dir.join(&filename);
+            let display_path = format!(".claude/agents/{}", filename);
 
-            fs::write(&target_path, &file.content)?;
-            result.add_created(format!(".claude/agents/{}", filename));
+            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
         }
 
         Ok(())
     }
 
     /// Apply skills: skills/*.ts → .claude/skills/
-    fn apply_skills(&self, files: &[TemplateFile], result: &mut ApplyResult) -> Result<()> {
+    fn apply_skills(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -224,16 +211,16 @@ impl ClaudeCodeAdapter {
         for file in files {
             let filename = file.relative_path.replace("skills/", "");
             let target_path = skills_dir.join(&filename);
+            let display_path = format!(".claude/skills/{}", filename);
 
-            fs::write(&target_path, &file.content)?;
-            result.add_created(format!(".claude/skills/{}", filename));
+            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
         }
 
         Ok(())
     }
 
     /// Apply settings: settings/*.json → .claude/settings.local.json (merged or replaced)
-    fn apply_settings(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult) -> Result<()> {
+    fn apply_settings(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -269,9 +256,7 @@ impl ClaudeCodeAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&settings)?;
-        fs::write(&settings_file, json_str)?;
-
-        result.add_updated(".claude/settings.local.json".to_string());
+        *mode = write_with_conflict(&settings_file, &json_str, *mode, result, ".claude/settings.local.json")?;
 
         Ok(())
     }
@@ -307,21 +292,22 @@ impl ToolAdapter for ClaudeCodeAdapter {
         &self,
         template_files: &TemplateFiles,
         _target_dir: &Path,
-        _force: bool,
+        conflict_mode: ConflictMode,
     ) -> Result<ApplyResult> {
         self.ensure_claude_dir()?;
 
         let mut result = ApplyResult::new();
+        let mut mode = conflict_mode;
 
         // Apply each section with their merge strategies
-        self.apply_rules(&template_files.rules, &mut result)?;
-        self.apply_memory(&template_files.memory, &template_files.memory_strategy, &mut result)?;
-        self.apply_commands(&template_files.commands, &mut result)?;
-        self.apply_mcp(&template_files.mcp, &template_files.mcp_strategy, &mut result)?;
-        self.apply_hooks(&template_files.hooks, &mut result)?;
-        self.apply_agents(&template_files.agents, &mut result)?;
-        self.apply_skills(&template_files.skills, &mut result)?;
-        self.apply_settings(&template_files.settings, &template_files.settings_strategy, &mut result)?;
+        self.apply_rules(&template_files.rules, &mut result, &mut mode)?;
+        self.apply_memory(&template_files.memory, &template_files.memory_strategy, &mut result, &mut mode)?;
+        self.apply_commands(&template_files.commands, &mut result, &mut mode)?;
+        self.apply_mcp(&template_files.mcp, &template_files.mcp_strategy, &mut result, &mut mode)?;
+        self.apply_hooks(&template_files.hooks, &mut result, &mut mode)?;
+        self.apply_agents(&template_files.agents, &mut result, &mut mode)?;
+        self.apply_skills(&template_files.skills, &mut result, &mut mode)?;
+        self.apply_settings(&template_files.settings, &template_files.settings_strategy, &mut result, &mut mode)?;
 
         Ok(result)
     }
@@ -471,7 +457,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert_eq!(result.created.len(), 1);
         assert!(result.created[0].contains("code-style.md"));
@@ -496,7 +482,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("CLAUDE.md")));
 
@@ -523,7 +509,7 @@ mod tests {
             ..Default::default()
         };
 
-        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+        adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(content.contains("# Existing Content"));
@@ -549,7 +535,7 @@ mod tests {
             ..Default::default()
         };
 
-        adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+        adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(!content.contains("# Existing Content"));
@@ -570,7 +556,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), false).unwrap();
+        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("build.md")));
 

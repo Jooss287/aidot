@@ -183,6 +183,7 @@ fn run() -> Result<()> {
             tools,
             dry_run,
             force,
+            skip,
         } => {
             let repos_to_apply: Vec<String> = if repositories.is_empty() {
                 // Apply all default repositories
@@ -229,7 +230,7 @@ fn run() -> Result<()> {
                         repo_source.white().bold()
                     );
                 }
-                commands::pull_template(repo_source.clone(), tools.clone(), dry_run, force)?;
+                commands::pull_template(repo_source.clone(), tools.clone(), dry_run, force, skip)?;
             }
 
             if repos_to_apply.len() > 1 {

@@ -98,9 +98,13 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
 
-        /// Force overwrite existing files
-        #[arg(short, long)]
+        /// Force overwrite existing files without asking
+        #[arg(short, long, conflicts_with = "skip")]
         force: bool,
+
+        /// Skip existing files without asking
+        #[arg(short, long, conflicts_with = "force")]
+        skip: bool,
     },
 
     /// Detect installed LLM tools

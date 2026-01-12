@@ -1,4 +1,4 @@
-use crate::adapters::detect_tools;
+use crate::adapters::{detect_tools, ConflictMode};
 use crate::error::Result;
 use crate::repository;
 use crate::template::parse_template;
@@ -10,7 +10,16 @@ pub fn pull_template(
     tools_filter: Option<Vec<String>>,
     dry_run: bool,
     force: bool,
+    skip: bool,
 ) -> Result<()> {
+    // Determine conflict mode
+    let conflict_mode = if force {
+        ConflictMode::Force
+    } else if skip {
+        ConflictMode::Skip
+    } else {
+        ConflictMode::Ask
+    };
     // Resolve repository source (local path, Git URL, or registered repo name)
     let template_path = repository::resolve_repository_source(&template_source)?;
 
@@ -147,7 +156,7 @@ pub fn pull_template(
             tool.name().white().bold()
         );
 
-        let result = tool.apply(&template_files, &target_dir, force)?;
+        let result = tool.apply(&template_files, &target_dir, conflict_mode)?;
 
         // Print results with colors
         if !result.created.is_empty() {
