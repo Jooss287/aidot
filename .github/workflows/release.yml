@@ -21,6 +21,8 @@ jobs:
           wait-interval: 10
           running-workflow-name: Check CI Status
           allowed-conclusions: success
+          # Only check CI workflow jobs (Test, Clippy, Format) - ignore Release workflow jobs
+          check-regexp: ^(Test|Clippy|Format)
 
   build:
     name: Build ${{ matrix.target }}
