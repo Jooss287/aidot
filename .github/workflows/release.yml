@@ -53,6 +53,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          AIDOT_VERSION: ${{ github.ref_name }}
 
       - name: Package (Unix)
         if: matrix.os != 'windows-latest'

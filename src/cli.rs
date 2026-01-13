@@ -1,8 +1,14 @@
 use clap::{Parser, Subcommand};
 
+/// Build-time version from AIDOT_VERSION env var, falls back to Cargo.toml version
+const VERSION: &str = match option_env!("AIDOT_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 #[derive(Parser, Debug)]
 #[command(name = "aidot")]
-#[command(version, about = "AI dotfiles - Manage LLM tool configurations")]
+#[command(version = VERSION, about = "AI dotfiles - Manage LLM tool configurations")]
 #[command(
     long_about = "aidot (AI dotfiles) is a CLI tool that manages LLM tool configurations \
 across multiple AI coding assistants. It fetches tool-agnostic configuration presets \
