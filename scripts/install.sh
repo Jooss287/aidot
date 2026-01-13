@@ -1,0 +1,154 @@
+#!/bin/bash
+# aidot installer script for Unix/macOS
+# Usage: curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.sh | bash
+
+set -e
+
+# Configuration
+REPO="Jooss287/aidot"
+INSTALL_DIR="${AIDOT_INSTALL_DIR:-$HOME/.local/bin}"
+BINARY_NAME="aidot"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    exit 1
+}
+
+# Detect OS and architecture
+detect_platform() {
+    local os arch
+
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$os" in
+        Linux)
+            os="unknown-linux-gnu"
+            ;;
+        Darwin)
+            os="apple-darwin"
+            ;;
+        *)
+            error "Unsupported operating system: $os"
+            ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)
+            arch="x86_64"
+            ;;
+        aarch64|arm64)
+            arch="aarch64"
+            ;;
+        *)
+            error "Unsupported architecture: $arch"
+            ;;
+    esac
+
+    echo "${arch}-${os}"
+}
+
+# Get latest release version
+get_latest_version() {
+    local version
+    version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+
+    if [ -z "$version" ]; then
+        error "Failed to get latest version"
+    fi
+
+    echo "$version"
+}
+
+# Download and install
+install() {
+    local platform version download_url temp_dir archive_name
+
+    platform=$(detect_platform)
+    version=$(get_latest_version)
+
+    info "Installing aidot ${version} for ${platform}..."
+
+    archive_name="aidot-${version}-${platform}.tar.gz"
+    download_url="https://github.com/${REPO}/releases/download/${version}/${archive_name}"
+
+    # Create temp directory
+    temp_dir=$(mktemp -d)
+    trap "rm -rf $temp_dir" EXIT
+
+    # Download
+    info "Downloading ${download_url}..."
+    if ! curl -fsSL "$download_url" -o "${temp_dir}/${archive_name}"; then
+        error "Failed to download aidot. Please check if the release exists for your platform."
+    fi
+
+    # Extract
+    info "Extracting..."
+    tar -xzf "${temp_dir}/${archive_name}" -C "$temp_dir"
+
+    # Install
+    info "Installing to ${INSTALL_DIR}..."
+    mkdir -p "$INSTALL_DIR"
+    mv "${temp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+    # Verify installation
+    if [ -x "${INSTALL_DIR}/${BINARY_NAME}" ]; then
+        info "Successfully installed aidot to ${INSTALL_DIR}/${BINARY_NAME}"
+    else
+        error "Installation failed"
+    fi
+
+    # Check if INSTALL_DIR is in PATH
+    if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
+        warn "Note: ${INSTALL_DIR} is not in your PATH"
+        echo ""
+        echo "Add the following to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+        echo ""
+        echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+        echo ""
+    fi
+
+    # Print version
+    echo ""
+    info "Installation complete!"
+    "${INSTALL_DIR}/${BINARY_NAME}" --version || true
+}
+
+# Uninstall
+uninstall() {
+    if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
+        rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+        info "Uninstalled aidot from ${INSTALL_DIR}"
+    else
+        warn "aidot is not installed in ${INSTALL_DIR}"
+    fi
+}
+
+# Main
+case "${1:-install}" in
+    install)
+        install
+        ;;
+    uninstall)
+        uninstall
+        ;;
+    *)
+        echo "Usage: $0 [install|uninstall]"
+        exit 1
+        ;;
+esac

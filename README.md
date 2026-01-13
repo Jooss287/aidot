@@ -304,76 +304,36 @@ aidot pull  # default 저장소 자동 적용
 
 ---
 
-## 개발자 가이드
+## 기여하기
 
-### 빌드 및 테스트
+프로젝트에 기여하고 싶으시다면 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고해주세요.
 
-```bash
-# 빌드
-cargo build
+---
 
-# 테스트 실행
-cargo test
+## 참고 자료
 
-# 코드 검사
-cargo clippy
+### Claude Code
+- [Skills](https://code.claude.com/docs/ko/skills)
+- [Plugins](https://code.claude.com/docs/ko/plugins)
+- [Settings](https://code.claude.com/docs/ko/settings)
 
-# 포맷팅
-cargo fmt
-```
+### GitHub Copilot
+- [Repository Instructions](https://docs.github.com/ko/copilot/how-tos/configure-custom-instructions/add-repository-instructions)
+- [Agent Skills](https://docs.github.com/ko/copilot/concepts/agents/about-agent-skills)
+- [MCP](https://docs.github.com/ko/copilot/concepts/context/mcp)
+- [Extend Copilot with MCP](https://docs.github.com/ko/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp)
+- [Custom Agents](https://docs.github.com/ko/copilot/how-tos/use-copilot-agents/coding-agent/create-custom-agents)
 
-### 프로젝트 구조
-
-```
-src/
-├── main.rs              # 엔트리 포인트
-├── cli.rs               # CLI 정의 (clap)
-├── commands/            # 명령어 구현
-│   ├── init.rs
-│   ├── pull.rs
-│   ├── detect.rs
-│   ├── status.rs
-│   ├── cache.rs
-│   └── diff.rs
-├── adapters/            # 도구별 어댑터
-│   ├── traits.rs        # ToolAdapter trait
-│   ├── detector.rs      # 도구 자동 감지
-│   ├── claude_code.rs
-│   ├── cursor.rs
-│   └── copilot.rs
-├── preset/              # 프리셋 처리
-│   ├── config.rs
-│   └── parser.rs
-├── repository.rs        # 저장소 관리
-├── cache.rs             # 캐시 시스템
-├── git.rs               # Git 작업
-├── config.rs            # 글로벌 설정
-└── error.rs             # 에러 타입
-```
-
-### 새 어댑터 추가
-
-`ToolAdapter` trait을 구현하여 새로운 LLM 도구를 지원할 수 있습니다:
-
-```rust
-pub trait ToolAdapter {
-    fn name(&self) -> &str;
-    fn detect(&self) -> bool;
-    fn apply(&self, preset: &PresetFiles, options: &ApplyOptions) -> Result<ApplyResult>;
-    fn preview(&self, preset: &PresetFiles) -> Result<PreviewResult>;
-}
-```
+### Cursor
+- [Rules](https://cursor.com/ko/docs/context/rules)
+- [MCP](https://cursor.com/ko/docs/context/mcp)
+- [Skills](https://cursor.com/ko/docs/context/skills)
+- [Hooks](https://cursor.com/ko/docs/agent/hooks)
+- [Commands](https://cursor.com/ko/docs/agent/chat/commands)
+- [Subagents](https://cursor.com/ko/docs/agent/subagents)
 
 ---
 
 ## 라이선스
 
 MIT License
-
----
-
-## 관련 문서
-
-- [PLAN.md](PLAN.md) - 상세 설계 문서
-- [CLAUDE.md](CLAUDE.md) - Claude Code 개발 가이드
-- [TODO.md](TODO.md) - 개발 진행 상황
