@@ -8,6 +8,6 @@ pub mod status;
 pub use cache::{clear_cache, update_cache};
 pub use detect::detect_tools;
 pub use diff::show_diff;
-pub use init::init_template;
-pub use pull::pull_template;
+pub use init::init_preset;
+pub use pull::pull_preset;
 pub use status::show_status;

@@ -11,8 +11,8 @@ pub enum AidotError {
     #[error("Configuration parse error: {0}")]
     ConfigParse(String),
 
-    #[error("Template parse error: {0}")]
-    TemplateParse(String),
+    #[error("Preset parse error: {0}")]
+    PresetParse(String),
 
     #[error("Git error: {0}")]
     Git(String),
@@ -20,11 +20,11 @@ pub enum AidotError {
     #[error("Repository not found: {0}")]
     RepositoryNotFound(String),
 
-    #[error("Template directory already exists: {0}")]
-    TemplateAlreadyExists(PathBuf),
+    #[error("Preset directory already exists: {0}")]
+    PresetAlreadyExists(PathBuf),
 
-    #[error("Invalid template structure: {0}")]
-    InvalidTemplate(String),
+    #[error("Invalid preset structure: {0}")]
+    InvalidPreset(String),
 
     #[error("Tool not detected: {0}")]
     ToolNotDetected(String),

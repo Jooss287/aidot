@@ -17,10 +17,10 @@ pub fn is_git_url(source: &str) -> bool {
 /// * `source` - Can be:
 ///   - A registered repository name (e.g., "common")
 ///   - A Git URL (e.g., "https://github.com/user/repo")
-///   - A local file path (e.g., "./my-template")
+///   - A local file path (e.g., "./my-preset")
 ///
 /// # Returns
-/// The local path to the template directory
+/// The local path to the preset directory
 pub fn resolve_repository_source(source: &str) -> Result<PathBuf> {
     // Check if it's a local path (direct input)
     let local_path = PathBuf::from(source);
@@ -33,14 +33,14 @@ pub fn resolve_repository_source(source: &str) -> Result<PathBuf> {
     if let Some(repo) = config.repositories.iter().find(|r| r.name == source) {
         match repo.source_type {
             SourceType::Local => {
-                // Local template: return path directly (no caching)
+                // Local preset: return path directly (no caching)
                 let path = PathBuf::from(&repo.url);
                 if path.exists() {
-                    println!("Using local template: {}", repo.url);
+                    println!("Using local preset: {}", repo.url);
                     return Ok(path);
                 } else {
                     return Err(crate::error::AidotError::RepositoryNotFound(format!(
-                        "Local template path does not exist: {}",
+                        "Local preset path does not exist: {}",
                         repo.url
                     )));
                 }
@@ -96,6 +96,6 @@ mod tests {
     fn test_url_to_repo_name() {
         assert_eq!(url_to_repo_name("https://github.com/user/repo.git"), "repo");
         assert_eq!(url_to_repo_name("https://github.com/user/repo"), "repo");
-        assert_eq!(url_to_repo_name("git@github.com:user/my-template.git"), "my-template");
+        assert_eq!(url_to_repo_name("git@github.com:user/my-preset.git"), "my-preset");
     }
 }

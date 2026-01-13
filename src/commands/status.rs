@@ -105,7 +105,7 @@ pub fn show_status() -> Result<()> {
         println!("  {}", "No repositories registered".dimmed());
         println!(
             "  {}",
-            "Use 'aidot repo add <name> <url>' to register a template repository".dimmed()
+            "Use 'aidot repo add <name> <url>' to register a preset repository".dimmed()
         );
     } else {
         for repo in &config.repositories {

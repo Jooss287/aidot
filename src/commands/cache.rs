@@ -8,7 +8,7 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
     let config = Config::load()?;
 
     if all {
-        // Update all cached repositories (skip local templates)
+        // Update all cached repositories (skip local presets)
         let caches = cache::list_caches()?;
 
         if caches.is_empty() {
@@ -28,14 +28,14 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
         let mut fail_count = 0;
 
         for cache_name in caches {
-            // Check if this is a local template
+            // Check if this is a local preset
             if let Some(repo) = config.repositories.iter().find(|r| r.name == cache_name) {
                 if repo.source_type == SourceType::Local {
                     println!(
                         "  {} '{}': {}",
                         "⊘".yellow(),
                         cache_name.white(),
-                        "local template (no caching needed)".dimmed()
+                        "local preset (no caching needed)".dimmed()
                     );
                     skip_count += 1;
                     continue;
@@ -74,11 +74,11 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
             );
         }
     } else if let Some(name) = repo_name {
-        // Check if this is a local template
+        // Check if this is a local preset
         if let Some(repo) = config.repositories.iter().find(|r| r.name == name) {
             if repo.source_type == SourceType::Local {
                 println!(
-                    "{} '{}' is a local template {}",
+                    "{} '{}' is a local preset {}",
                     "⊘".yellow(),
                     name.white().bold(),
                     "(no caching needed)".dimmed()

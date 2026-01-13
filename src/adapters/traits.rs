@@ -1,11 +1,11 @@
 use crate::error::Result;
-use crate::template::config::MergeStrategy;
+use crate::preset::config::MergeStrategy;
 use std::path::Path;
 
-/// Represents a template file to be converted
+/// Represents a preset file to be converted
 #[derive(Debug, Clone)]
-pub struct TemplateFile {
-    /// Relative path from template root (e.g., "rules/code-style.md")
+pub struct PresetFile {
+    /// Relative path from preset root (e.g., "rules/code-style.md")
     pub relative_path: String,
     /// Full content of the file
     pub content: String,
@@ -129,19 +129,19 @@ pub trait ToolAdapter {
     /// Detect if this tool is available/installed
     fn detect(&self) -> bool;
 
-    /// Apply template files to the target project directory
+    /// Apply preset files to the target project directory
     ///
     /// # Arguments
-    /// * `template_files` - Map of section name to list of files
-    ///   - "rules" -> Vec<TemplateFile>
-    ///   - "memory" -> Vec<TemplateFile>
-    ///   - "commands" -> Vec<TemplateFile>
+    /// * `preset_files` - Map of section name to list of files
+    ///   - "rules" -> Vec<PresetFile>
+    ///   - "memory" -> Vec<PresetFile>
+    ///   - "commands" -> Vec<PresetFile>
     ///   - etc.
     /// * `target_dir` - Project directory where files should be written
     /// * `conflict_mode` - How to handle existing files
     fn apply(
         &self,
-        template_files: &TemplateFiles,
+        preset_files: &PresetFiles,
         target_dir: &Path,
         conflict_mode: ConflictMode,
     ) -> Result<ApplyResult>;
@@ -149,23 +149,23 @@ pub trait ToolAdapter {
     /// Preview what changes would be made (for dry-run mode)
     fn preview(
         &self,
-        template_files: &TemplateFiles,
+        preset_files: &PresetFiles,
         target_dir: &Path,
         conflict_mode: ConflictMode,
     ) -> PreviewResult;
 }
 
-/// Template files organized by section with merge strategies
+/// Preset files organized by section with merge strategies
 #[derive(Debug, Default)]
-pub struct TemplateFiles {
-    pub rules: Vec<TemplateFile>,
-    pub memory: Vec<TemplateFile>,
-    pub commands: Vec<TemplateFile>,
-    pub mcp: Vec<TemplateFile>,
-    pub hooks: Vec<TemplateFile>,
-    pub agents: Vec<TemplateFile>,
-    pub skills: Vec<TemplateFile>,
-    pub settings: Vec<TemplateFile>,
+pub struct PresetFiles {
+    pub rules: Vec<PresetFile>,
+    pub memory: Vec<PresetFile>,
+    pub commands: Vec<PresetFile>,
+    pub mcp: Vec<PresetFile>,
+    pub hooks: Vec<PresetFile>,
+    pub agents: Vec<PresetFile>,
+    pub skills: Vec<PresetFile>,
+    pub settings: Vec<PresetFile>,
 
     // Merge strategies for each section
     pub rules_strategy: MergeStrategy,
@@ -178,7 +178,7 @@ pub struct TemplateFiles {
     pub settings_strategy: MergeStrategy,
 }
 
-/// Result of applying a template
+/// Result of applying a preset
 #[derive(Debug)]
 pub struct ApplyResult {
     /// Files that were created
@@ -259,8 +259,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_template_file_creation() {
-        let file = TemplateFile {
+    fn test_preset_file_creation() {
+        let file = PresetFile {
             relative_path: "rules/code-style.md".to_string(),
             content: "# Code Style Rules".to_string(),
         };
@@ -269,8 +269,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_files_default() {
-        let files = TemplateFiles::default();
+    fn test_preset_files_default() {
+        let files = PresetFiles::default();
         assert!(files.rules.is_empty());
         assert!(files.memory.is_empty());
         assert!(files.commands.is_empty());

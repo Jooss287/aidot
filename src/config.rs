@@ -37,7 +37,7 @@ pub struct Repository {
     pub description: Option<String>,
 }
 
-/// History entry for tracking applied templates
+/// History entry for tracking applied presets
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub project: String,
@@ -172,11 +172,11 @@ mod tests {
     fn test_local_repository_serialization() {
         let repo = Repository {
             name: "local-test".to_string(),
-            url: "/home/user/templates/my-template".to_string(),
+            url: "/home/user/presets/my-preset".to_string(),
             source_type: SourceType::Local,
             default: false,
             cached_at: None,
-            description: Some("Local template".to_string()),
+            description: Some("Local preset".to_string()),
         };
 
         let toml = toml::to_string(&repo).unwrap();

@@ -1,6 +1,6 @@
 # aidot
 
-> LLM 도구 설정을 통합 관리하는 CLI 도구
+> Claude Code, Cursor, GitHub Copilot 등 AI 코딩 도구 설정을 하나의 프리셋으로 관리하고 동기화하는 CLI
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -11,16 +11,16 @@
 
 ## 소개
 
-**aidot** (AI dotfiles)는 여러 LLM 코딩 도구(Claude Code, Cursor, GitHub Copilot 등)의 설정을 하나의 템플릿으로 통합 관리하는 CLI 도구입니다.
+**aidot** (AI dotfiles)는 여러 LLM 코딩 도구(Claude Code, Cursor, GitHub Copilot 등)의 설정을 하나의 프리셋으로 통합 관리하는 CLI 도구입니다.
 
-하나의 템플릿 저장소에서 설정을 관리하고, `aidot pull` 한 번으로 감지된 모든 LLM 도구에 자동 변환하여 적용합니다.
+하나의 프리셋 저장소에서 설정을 관리하고, `aidot pull` 한 번으로 감지된 모든 LLM 도구에 자동 변환하여 적용합니다.
 
 ### 핵심 기능
 
-- **도구 중립적 설정 관리** - 언어, IDE에 구애받지 않는 통합 템플릿
+- **도구 중립적 설정 관리** - 언어, IDE에 구애받지 않는 통합 프리셋
 - **자동 감지 및 변환** - 설치된 LLM 도구를 자동 감지하고 각 도구 형식으로 변환
-- **Git 기반 템플릿 공유** - 팀/개인 설정을 Git 저장소로 버전 관리
-- **다중 도구 동시 적용** - Cursor + Claude Code 등 여러 도구를 동시에 사용할 때 유용
+- **Git 기반 프리셋 공유** - 팀/개인 설정을 Git 저장소로 버전 관리
+- **환경 동기화** - 여러 PC에서 동일한 설정 유지, 팀원 간 설정 공유에 유용
 
 ---
 
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/USER/aidot/main/scripts/install.sh 
 # 설치된 LLM 도구 확인
 aidot detect
 
-# 팀 템플릿 저장소 등록
+# 팀 프리셋 저장소 등록
 aidot repo add team https://github.com/myteam/llm-config
 
 # 현재 프로젝트에 설정 적용
@@ -58,7 +58,7 @@ irm https://raw.githubusercontent.com/USER/aidot/main/scripts/install.ps1 | iex
 
 ### GitHub Releases에서 수동 설치
 
-[Releases 페이지](https://github.com/USER/aidot/releases)에서 플랫폼에 맞는 바이너리를 다운로드하세요:
+[Releases 페이지](https://github.com/Jooss287/aidot/releases)에서 플랫폼에 맞는 바이너리를 다운로드하세요:
 
 | 플랫폼 | 파일명 |
 |--------|--------|
@@ -70,16 +70,10 @@ irm https://raw.githubusercontent.com/USER/aidot/main/scripts/install.ps1 | iex
 
 다운로드 후 PATH에 추가하세요.
 
-### Cargo로 설치 (Rust 개발자용)
-
-```bash
-cargo install aidot
-```
-
 ### 소스에서 빌드
 
 ```bash
-git clone https://github.com/USER/aidot
+git clone https://github.com/Jooss287/aidot
 cd aidot
 cargo build --release
 
@@ -94,16 +88,16 @@ cargo build --release
 
 | 명령어 | 설명 |
 |--------|------|
-| `aidot init` | 새 템플릿 저장소 초기화 |
-| `aidot init --from-existing` | 기존 LLM 설정에서 템플릿 추출 |
-| `aidot repo add <name> <url>` | 템플릿 저장소 등록 |
+| `aidot init` | 새 프리셋 저장소 초기화 |
+| `aidot init --from-existing` | 기존 LLM 설정에서 프리셋 추출 |
+| `aidot repo add <name> <url>` | 프리셋 저장소 등록 |
 | `aidot repo list` | 등록된 저장소 목록 |
 | `aidot repo remove <name>` | 저장소 제거 |
-| `aidot pull <name>` | 템플릿 적용 |
+| `aidot pull <name>` | 프리셋 적용 |
 | `aidot pull --dry-run` | 변경 사항 미리보기 |
 | `aidot detect` | 설치된 LLM 도구 감지 |
 | `aidot status` | 현재 설정 상태 확인 |
-| `aidot diff <name>` | 템플릿과 현재 설정 비교 |
+| `aidot diff <name>` | 프리셋과 현재 설정 비교 |
 | `aidot cache update` | 캐시된 저장소 업데이트 |
 
 ### 저장소 관리
@@ -112,11 +106,11 @@ cargo build --release
 # Git 저장소 등록
 aidot repo add team https://github.com/myteam/llm-config
 
+# 로컬 폴더를 프리셋으로 등록
+aidot repo add local-dev ./presets/dev-config --local
+
 # default 플래그와 함께 등록 (pull 시 자동 적용)
 aidot repo add team https://github.com/myteam/llm-config --default
-
-# 로컬 폴더를 템플릿으로 등록
-aidot repo add local-dev ./templates/dev-config --local
 
 # 등록된 저장소 확인
 aidot repo list
@@ -128,7 +122,7 @@ aidot repo remove team
 ### 설정 적용
 
 ```bash
-# 특정 템플릿 적용
+# 특정 프리셋 적용
 aidot pull team
 
 # 모든 default 저장소 적용
@@ -144,25 +138,25 @@ aidot pull team --dry-run
 aidot pull team --force
 ```
 
-### 템플릿 생성
+### 프리셋 생성
 
 ```bash
-# 빈 템플릿 구조 생성
+# 빈 프리셋 구조 생성
 aidot init
 
-# 기존 LLM 설정에서 템플릿 추출
+# 기존 LLM 설정에서 프리셋 추출
 aidot init --from-existing
 ```
 
 ---
 
-## 템플릿 구조
+## 프리셋 구조
 
-aidot 템플릿은 다음과 같은 구조를 가집니다:
+aidot 프리셋은 다음과 같은 구조를 가집니다:
 
 ```
-llm-template/
-├── .aidot-config.toml       # 템플릿 설정 파일
+llm-preset/
+├── .aidot-config.toml       # 프리셋 설정 파일
 ├── rules/                   # 규칙/인스트럭션 (LLM 행동 규칙)
 │   ├── code-style.md
 │   └── security.md
@@ -223,7 +217,7 @@ directory = "settings/"
 
 ### Claude Code
 
-| 템플릿 | 변환 결과 |
+| 프리셋 | 변환 결과 |
 |--------|-----------|
 | `rules/*.md` | `.claude/rules/` |
 | `memory/*.md` | `.claude/CLAUDE.md` |
@@ -236,7 +230,7 @@ directory = "settings/"
 
 ### Cursor
 
-| 템플릿 | 변환 결과 |
+| 프리셋 | 변환 결과 |
 |--------|-----------|
 | `rules/*.md` | `.cursorrules` |
 | `memory/*.md` | `.cursorrules` (Always Apply 섹션) |
@@ -248,7 +242,7 @@ directory = "settings/"
 
 ### GitHub Copilot
 
-| 템플릿 | 변환 결과 |
+| 프리셋 | 변환 결과 |
 |--------|-----------|
 | `rules/*.md` | `.github/copilot-instructions.md` |
 | `memory/*.md` | `.github/copilot-instructions.md` (Project Context) |
@@ -278,21 +272,21 @@ aidot pull team
 # ✓ Claude Code → .claude/rules/
 ```
 
-### 2. 기존 설정에서 템플릿 생성
+### 2. 기존 설정에서 프리셋 생성
 
 ```bash
 # 이미 LLM 설정이 있는 프로젝트에서
 cd my-existing-project
 
-# 기존 설정을 템플릿으로 추출
+# 기존 설정을 프리셋으로 추출
 aidot init --from-existing
 # Found:
 #   ✓ .cursorrules
 #   ✓ .claude/rules/
-# Converting to aidot template...
+# Converting to aidot preset...
 
 # Git에 커밋하고 공유
-git init && git add . && git commit -m "Add LLM template"
+git init && git add . && git commit -m "Add LLM preset"
 git remote add origin https://github.com/myteam/llm-config
 git push -u origin main
 ```
@@ -300,7 +294,7 @@ git push -u origin main
 ### 3. 팀 설정 공유
 
 ```bash
-# 팀원 A: 템플릿 저장소 등록
+# 팀원 A: 프리셋 저장소 등록
 aidot repo add team https://github.com/myteam/llm-config --default
 
 # 팀원 B: 새 프로젝트에서
@@ -347,7 +341,7 @@ src/
 │   ├── claude_code.rs
 │   ├── cursor.rs
 │   └── copilot.rs
-├── template/            # 템플릿 처리
+├── preset/              # 프리셋 처리
 │   ├── config.rs
 │   └── parser.rs
 ├── repository.rs        # 저장소 관리
@@ -365,8 +359,8 @@ src/
 pub trait ToolAdapter {
     fn name(&self) -> &str;
     fn detect(&self) -> bool;
-    fn apply(&self, template: &TemplateFiles, options: &ApplyOptions) -> Result<ApplyResult>;
-    fn preview(&self, template: &TemplateFiles) -> Result<PreviewResult>;
+    fn apply(&self, preset: &PresetFiles, options: &ApplyOptions) -> Result<ApplyResult>;
+    fn preview(&self, preset: &PresetFiles) -> Result<PreviewResult>;
 }
 ```
 

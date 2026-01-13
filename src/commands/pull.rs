@@ -1,12 +1,12 @@
 use crate::adapters::{detect_tools, ConflictMode};
 use crate::error::Result;
 use crate::repository;
-use crate::template::parse_template;
+use crate::preset::parse_preset;
 use colored::Colorize;
 
-/// Pull and apply template configurations
-pub fn pull_template(
-    template_source: String,
+/// Pull and apply preset configurations
+pub fn pull_preset(
+    preset_source: String,
     tools_filter: Option<Vec<String>>,
     dry_run: bool,
     force: bool,
@@ -21,16 +21,16 @@ pub fn pull_template(
         ConflictMode::Ask
     };
     // Resolve repository source (local path, Git URL, or registered repo name)
-    let template_path = repository::resolve_repository_source(&template_source)?;
+    let preset_path = repository::resolve_repository_source(&preset_source)?;
 
     println!(
         "{} {}",
-        "Loading template from".cyan(),
-        template_path.display().to_string().white()
+        "Loading preset from".cyan(),
+        preset_path.display().to_string().white()
     );
 
-    // Parse template
-    let (_config, template_files) = parse_template(&template_path)?;
+    // Parse preset
+    let (_config, preset_files) = parse_preset(&preset_path)?;
 
     // Get current directory as target
     let target_dir = std::env::current_dir()?;
@@ -102,7 +102,7 @@ pub fn pull_template(
                 tool.name().white().bold()
             );
 
-            let preview = tool.preview(&template_files, &target_dir, conflict_mode);
+            let preview = tool.preview(&preset_files, &target_dir, conflict_mode);
 
             if !preview.has_changes() {
                 println!("  {} No changes would be made", "ℹ".blue());
@@ -156,7 +156,7 @@ pub fn pull_template(
             tool.name().white().bold()
         );
 
-        let result = tool.apply(&template_files, &target_dir, conflict_mode)?;
+        let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
 
         // Print results with colors
         if !result.created.is_empty() {
@@ -183,7 +183,7 @@ pub fn pull_template(
         println!();
     }
 
-    println!("{}", "✓ Template applied successfully!".green().bold());
+    println!("{}", "✓ Preset applied successfully!".green().bold());
 
     Ok(())
 }

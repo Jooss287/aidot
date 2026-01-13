@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// Template configuration from .aidot-config.toml
+/// Preset configuration from .aidot-config.toml
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateConfig {
+pub struct PresetConfig {
     pub metadata: Metadata,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,24 +68,24 @@ fn default_merge_strategy() -> MergeStrategy {
     MergeStrategy::Concat
 }
 
-impl TemplateConfig {
-    /// Load template configuration from .aidot-config.toml
+impl PresetConfig {
+    /// Load preset configuration from .aidot-config.toml
     pub fn load(path: &Path) -> Result<Self> {
         let config_file = path.join(".aidot-config.toml");
 
         if !config_file.exists() {
-            return Err(AidotError::InvalidTemplate(format!(
+            return Err(AidotError::InvalidPreset(format!(
                 "Missing .aidot-config.toml in {}",
                 path.display()
             )));
         }
 
         let content = fs::read_to_string(&config_file)?;
-        let config: TemplateConfig = toml::from_str(&content)?;
+        let config: PresetConfig = toml::from_str(&content)?;
         Ok(config)
     }
 
-    /// Save template configuration to .aidot-config.toml
+    /// Save preset configuration to .aidot-config.toml
     pub fn save(&self, path: &Path) -> Result<()> {
         let config_file = path.join(".aidot-config.toml");
         let content = toml::to_string_pretty(self)?;
@@ -93,13 +93,13 @@ impl TemplateConfig {
         Ok(())
     }
 
-    /// Create a default template configuration
-    pub fn default_template(name: &str) -> Self {
-        TemplateConfig {
+    /// Create a default preset configuration
+    pub fn default_preset(name: &str) -> Self {
+        PresetConfig {
             metadata: Metadata {
                 name: name.to_string(),
                 version: "1.0.0".to_string(),
-                description: Some("LLM configuration template".to_string()),
+                description: Some("LLM configuration preset".to_string()),
             },
             rules: Some(RulesSection {
                 files: vec!["rules/code-style.md".to_string()],
@@ -143,9 +143,9 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_default_template() {
-        let config = TemplateConfig::default_template("test-template");
-        assert_eq!(config.metadata.name, "test-template");
+    fn test_default_preset() {
+        let config = PresetConfig::default_preset("test-preset");
+        assert_eq!(config.metadata.name, "test-preset");
         assert_eq!(config.metadata.version, "1.0.0");
         assert!(config.rules.is_some());
         assert!(config.memory.is_some());
@@ -197,17 +197,17 @@ mod tests {
     }
 
     #[test]
-    fn test_template_config_serialization() {
-        let config = TemplateConfig::default_template("test");
+    fn test_preset_config_serialization() {
+        let config = PresetConfig::default_preset("test");
         let toml = toml::to_string_pretty(&config).unwrap();
-        let deserialized: TemplateConfig = toml::from_str(&toml).unwrap();
+        let deserialized: PresetConfig = toml::from_str(&toml).unwrap();
 
         assert_eq!(config.metadata.name, deserialized.metadata.name);
     }
 
     #[test]
-    fn test_template_config_all_sections() {
-        let config = TemplateConfig::default_template("full-test");
+    fn test_preset_config_all_sections() {
+        let config = PresetConfig::default_preset("full-test");
 
         assert!(config.rules.is_some());
         assert!(config.memory.is_some());
@@ -224,9 +224,9 @@ mod tests {
     }
 
     #[test]
-    fn test_template_config_save_and_load() {
+    fn test_preset_config_save_and_load() {
         let temp_dir = TempDir::new().unwrap();
-        let config = TemplateConfig::default_template("save-test");
+        let config = PresetConfig::default_preset("save-test");
 
         // Save
         config.save(temp_dir.path()).unwrap();
@@ -236,15 +236,15 @@ mod tests {
         assert!(config_file.exists());
 
         // Load
-        let loaded = TemplateConfig::load(temp_dir.path()).unwrap();
+        let loaded = PresetConfig::load(temp_dir.path()).unwrap();
         assert_eq!(loaded.metadata.name, "save-test");
         assert_eq!(loaded.metadata.version, "1.0.0");
     }
 
     #[test]
-    fn test_template_config_load_missing_file() {
+    fn test_preset_config_load_missing_file() {
         let temp_dir = TempDir::new().unwrap();
-        let result = TemplateConfig::load(temp_dir.path());
+        let result = PresetConfig::load(temp_dir.path());
         assert!(result.is_err());
     }
 

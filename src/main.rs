@@ -6,7 +6,7 @@ mod config;
 mod error;
 mod git;
 mod repository;
-mod template;
+mod preset;
 
 use clap::Parser;
 use cli::{CacheCommands, Cli, Commands, RepoCommands};
@@ -30,7 +30,7 @@ fn run() -> Result<()> {
             force,
             path,
         } => {
-            commands::init_template(path, from_existing, interactive, force)?;
+            commands::init_preset(path, from_existing, interactive, force)?;
         }
 
         Commands::Repo(repo_cmd) => match repo_cmd {
@@ -76,7 +76,7 @@ fn run() -> Result<()> {
                 };
 
                 let type_label = if local {
-                    "local template".yellow()
+                    "local preset".yellow()
                 } else {
                     "repository".cyan()
                 };
@@ -107,7 +107,7 @@ fn run() -> Result<()> {
                 println!(
                     "{} {} '{}' added successfully{}",
                     "✓".green(),
-                    if local { "Local template" } else { "Repository" },
+                    if local { "Local preset" } else { "Repository" },
                     name.white().bold(),
                     default_msg
                 );
@@ -119,7 +119,7 @@ fn run() -> Result<()> {
                     println!("{}", "No repositories registered.".yellow());
                     println!(
                         "{}",
-                        "Use 'aidot repo add <name> <url>' to register a template repository."
+                        "Use 'aidot repo add <name> <url>' to register a preset repository."
                             .dimmed()
                     );
                 } else {
@@ -230,7 +230,7 @@ fn run() -> Result<()> {
                         repo_source.white().bold()
                     );
                 }
-                commands::pull_template(repo_source.clone(), tools.clone(), dry_run, force, skip)?;
+                commands::pull_preset(repo_source.clone(), tools.clone(), dry_run, force, skip)?;
             }
 
             if repos_to_apply.len() > 1 {

@@ -2,7 +2,7 @@
 //!
 //! These tests verify end-to-end workflows like:
 //! - init → pull → diff
-//! - Template parsing and application
+//! - Preset parsing and application
 //! - Multi-tool support
 
 use std::fs;
@@ -18,14 +18,14 @@ fn run_aidot(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
         .expect("Failed to execute aidot")
 }
 
-/// Helper to create a basic template structure
-fn create_test_template(dir: &std::path::Path) {
+/// Helper to create a basic preset structure
+fn create_test_preset(dir: &std::path::Path) {
     // Create .aidot-config.toml
     let config = r#"
 [metadata]
-name = "test-template"
+name = "test-preset"
 version = "1.0.0"
-description = "Test template"
+description = "Test preset"
 
 [rules]
 files = ["rules/test.md"]
@@ -53,7 +53,7 @@ merge_strategy = "replace"
 }
 
 #[test]
-fn test_init_creates_template_structure() {
+fn test_init_creates_preset_structure() {
     let temp_dir = TempDir::new().unwrap();
     let output = run_aidot(&["init"], temp_dir.path());
 
@@ -102,20 +102,20 @@ fn test_detect_command() {
 }
 
 #[test]
-fn test_pull_from_local_template() {
+fn test_pull_from_local_preset() {
     let _temp_dir = TempDir::new().unwrap();
-    let template_dir = TempDir::new().unwrap();
+    let preset_dir = TempDir::new().unwrap();
     let project_dir = TempDir::new().unwrap();
 
-    // Create template
-    create_test_template(template_dir.path());
+    // Create preset
+    create_test_preset(preset_dir.path());
 
     // Create .claude directory in project to ensure detection
     fs::create_dir_all(project_dir.path().join(".claude")).unwrap();
 
-    // Pull from local template
+    // Pull from local preset
     let output = run_aidot(
-        &["pull", template_dir.path().to_str().unwrap()],
+        &["pull", preset_dir.path().to_str().unwrap()],
         project_dir.path(),
     );
 
@@ -127,18 +127,18 @@ fn test_pull_from_local_template() {
 
 #[test]
 fn test_pull_dry_run() {
-    let template_dir = TempDir::new().unwrap();
+    let preset_dir = TempDir::new().unwrap();
     let project_dir = TempDir::new().unwrap();
 
-    // Create template
-    create_test_template(template_dir.path());
+    // Create preset
+    create_test_preset(preset_dir.path());
 
     // Create .claude directory
     fs::create_dir_all(project_dir.path().join(".claude")).unwrap();
 
     // Pull with --dry-run
     let output = run_aidot(
-        &["pull", template_dir.path().to_str().unwrap(), "--dry-run"],
+        &["pull", preset_dir.path().to_str().unwrap(), "--dry-run"],
         project_dir.path(),
     );
 
@@ -151,18 +151,18 @@ fn test_pull_dry_run() {
 
 #[test]
 fn test_diff_command() {
-    let template_dir = TempDir::new().unwrap();
+    let preset_dir = TempDir::new().unwrap();
     let project_dir = TempDir::new().unwrap();
 
-    // Create template
-    create_test_template(template_dir.path());
+    // Create preset
+    create_test_preset(preset_dir.path());
 
     // Create project with .claude dir
     fs::create_dir_all(project_dir.path().join(".claude")).unwrap();
 
     // Run diff
     let output = run_aidot(
-        &["diff", template_dir.path().to_str().unwrap()],
+        &["diff", preset_dir.path().to_str().unwrap()],
         project_dir.path(),
     );
 
@@ -203,11 +203,11 @@ fn test_repo_list_empty() {
 
 #[test]
 fn test_pull_with_tools_filter() {
-    let template_dir = TempDir::new().unwrap();
+    let preset_dir = TempDir::new().unwrap();
     let project_dir = TempDir::new().unwrap();
 
-    // Create template
-    create_test_template(template_dir.path());
+    // Create preset
+    create_test_preset(preset_dir.path());
 
     // Create both .claude and .cursor dirs
     fs::create_dir_all(project_dir.path().join(".claude")).unwrap();
@@ -217,7 +217,7 @@ fn test_pull_with_tools_filter() {
     let output = run_aidot(
         &[
             "pull",
-            template_dir.path().to_str().unwrap(),
+            preset_dir.path().to_str().unwrap(),
             "--tools",
             "claude",
         ],

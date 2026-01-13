@@ -1,5 +1,5 @@
 use crate::error::{AidotError, Result};
-use crate::template::TemplateConfig;
+use crate::preset::PresetConfig;
 use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,8 +31,8 @@ impl ExtractedFiles {
     }
 }
 
-/// Initialize a new template repository
-pub fn init_template(
+/// Initialize a new preset repository
+pub fn init_preset(
     path: Option<String>,
     from_existing: bool,
     _interactive: bool,
@@ -47,28 +47,28 @@ pub fn init_template(
     // Check if .aidot-config.toml already exists
     let config_file = target_dir.join(".aidot-config.toml");
     if config_file.exists() && !force {
-        return Err(AidotError::TemplateAlreadyExists(target_dir));
+        return Err(AidotError::PresetAlreadyExists(target_dir));
     }
 
     if from_existing {
         init_from_existing(&target_dir)?;
     } else {
-        init_empty_template(&target_dir)?;
+        init_empty_preset(&target_dir)?;
     }
 
     println!(
         "{} {}",
-        "✓ Template repository initialized at".green().bold(),
+        "✓ Preset repository initialized at".green().bold(),
         target_dir.display().to_string().white()
     );
     Ok(())
 }
 
-/// Initialize an empty template repository
-fn init_empty_template(path: &Path) -> Result<()> {
+/// Initialize an empty preset repository
+fn init_empty_preset(path: &Path) -> Result<()> {
     println!(
         "{}\n",
-        "Initializing empty aidot template repository...".cyan()
+        "Initializing empty aidot preset repository...".cyan()
     );
 
     // Create directory structure
@@ -97,11 +97,11 @@ fn init_empty_template(path: &Path) -> Result<()> {
     }
 
     // Create .aidot-config.toml
-    let template_name = path
+    let preset_name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("llm-template");
-    let config = TemplateConfig::default_template(template_name);
+        .unwrap_or("llm-preset");
+    let config = PresetConfig::default_preset(preset_name);
     config.save(path)?;
     println!(
         "  {} {} {}",
@@ -111,9 +111,9 @@ fn init_empty_template(path: &Path) -> Result<()> {
     );
 
     // Create README.md
-    create_readme(path, template_name)?;
+    create_readme(path, preset_name)?;
 
-    println!("\n{}", "Template repository initialized!".green().bold());
+    println!("\n{}", "Preset repository initialized!".green().bold());
     println!("\n{}:", "Next steps".cyan().bold());
     println!(
         "  {} Add your configuration files to {}, {}, {}, etc.",
@@ -130,7 +130,7 @@ fn init_empty_template(path: &Path) -> Result<()> {
     println!(
         "  {} {}",
         "3.".white(),
-        "git init && git add . && git commit -m 'Initial template'".dimmed()
+        "git init && git add . && git commit -m 'Initial preset'".dimmed()
     );
     println!("  {} Push to your Git repository", "4.".white());
     println!(
@@ -142,11 +142,11 @@ fn init_empty_template(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Initialize template from existing LLM configurations
+/// Initialize preset from existing LLM configurations
 fn init_from_existing(path: &Path) -> Result<()> {
     println!(
         "{}\n",
-        "Extracting template from existing LLM configurations...".cyan()
+        "Extracting preset from existing LLM configurations...".cyan()
     );
 
     let mut extracted = ExtractedFiles::default();
@@ -180,7 +180,7 @@ fn init_from_existing(path: &Path) -> Result<()> {
         println!(
             "\n  {} {}",
             "Tip:".cyan(),
-            "Use 'aidot init' to create an empty template instead.".white()
+            "Use 'aidot init' to create an empty preset instead.".white()
         );
         return Ok(());
     }
@@ -217,11 +217,11 @@ fn init_from_existing(path: &Path) -> Result<()> {
     written_count += write_extracted_files(path, "settings", &extracted.settings)?;
 
     // Create .aidot-config.toml
-    let template_name = path
+    let preset_name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("llm-template");
-    let config = TemplateConfig::default_template(template_name);
+        .unwrap_or("llm-preset");
+    let config = PresetConfig::default_preset(preset_name);
     config.save(path)?;
     println!(
         "  {} {} {}",
@@ -231,7 +231,7 @@ fn init_from_existing(path: &Path) -> Result<()> {
     );
 
     // Create README.md
-    create_readme(path, template_name)?;
+    create_readme(path, preset_name)?;
 
     println!(
         "\n{} {} files extracted from existing configurations",
@@ -258,7 +258,7 @@ fn init_from_existing(path: &Path) -> Result<()> {
     println!(
         "  {} {}",
         "4.".white(),
-        "git init && git add . && git commit -m 'Initial template'".dimmed()
+        "git init && git add . && git commit -m 'Initial preset'".dimmed()
     );
 
     Ok(())
@@ -750,10 +750,10 @@ fn extract_copilot(source_path: &Path, extracted: &mut ExtractedFiles) -> Result
     }
 }
 
-/// Create README.md for the template repository
-fn create_readme(path: &Path, template_name: &str) -> Result<()> {
+/// Create README.md for the preset repository
+fn create_readme(path: &Path, preset_name: &str) -> Result<()> {
     let readme = format!(
-        r#"# {} - LLM Configuration Template
+        r#"# {} - LLM Configuration Preset
 
 This repository contains LLM tool configurations managed by [aidot](https://github.com/yourorg/aidot).
 
@@ -819,7 +819,7 @@ Add tool-specific settings (JSON format):
 # Installation instructions for aidot
 ```
 
-### Add this template
+### Add this preset
 
 ```bash
 aidot repo add {} <repository-url>
@@ -838,7 +838,7 @@ Edit the files in this repository to customize the configuration for your team o
 
 ## Supported Tools
 
-This template is compatible with:
+This preset is compatible with:
 - Claude Code
 - Cursor
 - Aider
@@ -847,7 +847,7 @@ This template is compatible with:
 
 aidot automatically converts these configurations to the appropriate format for each tool.
 "#,
-        template_name, template_name, template_name
+        preset_name, preset_name, preset_name
     );
 
     fs::write(path.join("README.md"), readme)?;

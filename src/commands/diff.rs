@@ -1,25 +1,25 @@
 use crate::adapters::detector::detect_tools;
-use crate::adapters::traits::TemplateFiles;
+use crate::adapters::traits::PresetFiles;
 use crate::error::Result;
 use crate::repository::resolve_repository_source;
-use crate::template::parser::parse_template;
+use crate::preset::parser::parse_preset;
 use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
-/// Show diff between template and current configuration
+/// Show diff between preset and current configuration
 pub fn show_diff(repo_source: String) -> Result<()> {
     let target_dir = std::env::current_dir()?;
 
     // Resolve repository source
-    let template_path = resolve_repository_source(&repo_source)?;
+    let preset_path = resolve_repository_source(&repo_source)?;
 
-    // Parse template
-    let (_config, template_files) = parse_template(&template_path)?;
+    // Parse preset
+    let (_config, preset_files) = parse_preset(&preset_path)?;
 
     println!(
         "{} '{}'\n",
-        "Comparing template".cyan().bold(),
+        "Comparing preset".cyan().bold(),
         repo_source.white()
     );
 
@@ -42,13 +42,13 @@ pub fn show_diff(repo_source: String) -> Result<()> {
     for tool in &tools {
         println!("{}", format!("═══ {} ═══", tool.name()).cyan().bold());
 
-        let diff_result = compute_diff(tool.name(), &template_files, &target_dir)?;
+        let diff_result = compute_diff(tool.name(), &preset_files, &target_dir)?;
 
         if diff_result.new_files.is_empty()
             && diff_result.modified_files.is_empty()
             && diff_result.unchanged_files.is_empty()
         {
-            println!("  {} No template files for this tool\n", "○".dimmed());
+            println!("  {} No preset files for this tool\n", "○".dimmed());
             continue;
         }
 
@@ -115,8 +115,8 @@ struct DiffResult {
     unchanged_files: Vec<String>,
 }
 
-/// Compute diff between template and current tool configuration
-fn compute_diff(tool_name: &str, template: &TemplateFiles, target_dir: &Path) -> Result<DiffResult> {
+/// Compute diff between preset and current tool configuration
+fn compute_diff(tool_name: &str, preset: &PresetFiles, target_dir: &Path) -> Result<DiffResult> {
     let mut result = DiffResult {
         new_files: Vec::new(),
         modified_files: Vec::new(),
@@ -124,9 +124,9 @@ fn compute_diff(tool_name: &str, template: &TemplateFiles, target_dir: &Path) ->
     };
 
     match tool_name {
-        "Claude Code" => compute_claude_diff(template, target_dir, &mut result)?,
-        "Cursor" => compute_cursor_diff(template, target_dir, &mut result)?,
-        "GitHub Copilot" => compute_copilot_diff(template, target_dir, &mut result)?,
+        "Claude Code" => compute_claude_diff(preset, target_dir, &mut result)?,
+        "Cursor" => compute_cursor_diff(preset, target_dir, &mut result)?,
+        "GitHub Copilot" => compute_copilot_diff(preset, target_dir, &mut result)?,
         _ => {}
     }
 
@@ -135,14 +135,14 @@ fn compute_diff(tool_name: &str, template: &TemplateFiles, target_dir: &Path) ->
 
 /// Compute diff for Claude Code
 fn compute_claude_diff(
-    template: &TemplateFiles,
+    preset: &PresetFiles,
     target_dir: &Path,
     result: &mut DiffResult,
 ) -> Result<()> {
     let claude_dir = target_dir.join(".claude");
 
-    // Rules: template rules/*.md → .claude/rules/
-    for file in &template.rules {
+    // Rules: preset rules/*.md → .claude/rules/
+    for file in &preset.rules {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -151,20 +151,20 @@ fn compute_claude_diff(
         compare_file(&target_file, &file.content, &filename, result);
     }
 
-    // Memory: template memory/*.md → .claude/CLAUDE.md (merged)
-    if !template.memory.is_empty() {
+    // Memory: preset memory/*.md → .claude/CLAUDE.md (merged)
+    if !preset.memory.is_empty() {
         let target_file = claude_dir.join("CLAUDE.md");
-        let template_content: String = template
+        let preset_content: String = preset
             .memory
             .iter()
             .map(|f| f.content.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
-        compare_file(&target_file, &template_content, "CLAUDE.md", result);
+        compare_file(&target_file, &preset_content, "CLAUDE.md", result);
     }
 
-    // Commands: template commands/*.md → .claude/commands/
-    for file in &template.commands {
+    // Commands: preset commands/*.md → .claude/commands/
+    for file in &preset.commands {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -173,8 +173,8 @@ fn compute_claude_diff(
         compare_file(&target_file, &file.content, &format!("commands/{}", filename), result);
     }
 
-    // MCP: template mcp/*.json → .claude/settings.local.json (mcpServers section)
-    if !template.mcp.is_empty() {
+    // MCP: preset mcp/*.json → .claude/settings.local.json (mcpServers section)
+    if !preset.mcp.is_empty() {
         let target_file = claude_dir.join("settings.local.json");
         if target_file.exists() {
             // Check if mcpServers section exists and differs
@@ -183,7 +183,7 @@ fn compute_claude_diff(
                     if json.get("mcpServers").is_some() {
                         result.modified_files.push((
                             "settings.local.json (mcpServers)".to_string(),
-                            Some(format!("{} MCP servers in template", template.mcp.len())),
+                            Some(format!("{} MCP servers in preset", preset.mcp.len())),
                         ));
                     } else {
                         result.new_files.push("settings.local.json (mcpServers section)".to_string());
@@ -196,13 +196,13 @@ fn compute_claude_diff(
     }
 
     // Hooks
-    if !template.hooks.is_empty() {
+    if !preset.hooks.is_empty() {
         let target_file = claude_dir.join("hooks.json");
         compare_file_exists(&target_file, "hooks.json", result);
     }
 
     // Agents
-    for file in &template.agents {
+    for file in &preset.agents {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -212,7 +212,7 @@ fn compute_claude_diff(
     }
 
     // Skills
-    for file in &template.skills {
+    for file in &preset.skills {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -226,20 +226,20 @@ fn compute_claude_diff(
 
 /// Compute diff for Cursor
 fn compute_cursor_diff(
-    template: &TemplateFiles,
+    preset: &PresetFiles,
     target_dir: &Path,
     result: &mut DiffResult,
 ) -> Result<()> {
     let cursor_dir = target_dir.join(".cursor");
 
     // Rules + Memory → .cursorrules (merged)
-    if !template.rules.is_empty() || !template.memory.is_empty() {
+    if !preset.rules.is_empty() || !preset.memory.is_empty() {
         let target_file = target_dir.join(".cursorrules");
         compare_file_exists(&target_file, ".cursorrules", result);
     }
 
     // Commands
-    for file in &template.commands {
+    for file in &preset.commands {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -249,19 +249,19 @@ fn compute_cursor_diff(
     }
 
     // MCP
-    if !template.mcp.is_empty() {
+    if !preset.mcp.is_empty() {
         let target_file = cursor_dir.join("mcp.json");
         compare_file_exists(&target_file, "mcp.json", result);
     }
 
     // Hooks
-    if !template.hooks.is_empty() {
+    if !preset.hooks.is_empty() {
         let target_file = cursor_dir.join("hooks.json");
         compare_file_exists(&target_file, "hooks.json", result);
     }
 
     // Agents
-    for file in &template.agents {
+    for file in &preset.agents {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -271,7 +271,7 @@ fn compute_cursor_diff(
     }
 
     // Skills
-    for file in &template.skills {
+    for file in &preset.skills {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -285,20 +285,20 @@ fn compute_cursor_diff(
 
 /// Compute diff for GitHub Copilot
 fn compute_copilot_diff(
-    template: &TemplateFiles,
+    preset: &PresetFiles,
     target_dir: &Path,
     result: &mut DiffResult,
 ) -> Result<()> {
     let github_dir = target_dir.join(".github");
 
     // Rules + Memory → .github/copilot-instructions.md (merged)
-    if !template.rules.is_empty() || !template.memory.is_empty() {
+    if !preset.rules.is_empty() || !preset.memory.is_empty() {
         let target_file = github_dir.join("copilot-instructions.md");
         compare_file_exists(&target_file, "copilot-instructions.md", result);
     }
 
     // Commands → .github/prompts/*.prompt.md
-    for file in &template.commands {
+    for file in &preset.commands {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -309,13 +309,13 @@ fn compute_copilot_diff(
     }
 
     // MCP → .vscode/mcp.json
-    if !template.mcp.is_empty() {
+    if !preset.mcp.is_empty() {
         let target_file = target_dir.join(".vscode").join("mcp.json");
         compare_file_exists(&target_file, ".vscode/mcp.json", result);
     }
 
     // Agents → .github/agents/*.agent.md
-    for file in &template.agents {
+    for file in &preset.agents {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -326,7 +326,7 @@ fn compute_copilot_diff(
     }
 
     // Skills → .github/skills/
-    for file in &template.skills {
+    for file in &preset.skills {
         let filename = Path::new(&file.relative_path)
             .file_name()
             .unwrap_or_default()
@@ -339,7 +339,7 @@ fn compute_copilot_diff(
 }
 
 /// Compare a single file
-fn compare_file(target_path: &Path, template_content: &str, display_name: &str, result: &mut DiffResult) {
+fn compare_file(target_path: &Path, preset_content: &str, display_name: &str, result: &mut DiffResult) {
     if !target_path.exists() {
         result.new_files.push(display_name.to_string());
         return;
@@ -347,18 +347,18 @@ fn compare_file(target_path: &Path, template_content: &str, display_name: &str, 
 
     if let Ok(existing_content) = fs::read_to_string(target_path) {
         let existing_normalized = normalize_content(&existing_content);
-        let template_normalized = normalize_content(template_content);
+        let preset_normalized = normalize_content(preset_content);
 
-        if existing_normalized == template_normalized {
+        if existing_normalized == preset_normalized {
             result.unchanged_files.push(display_name.to_string());
         } else {
             // Calculate simple diff info
             let existing_lines = existing_content.lines().count();
-            let template_lines = template_content.lines().count();
-            let diff_info = if template_lines > existing_lines {
-                format!("+{} lines", template_lines - existing_lines)
-            } else if existing_lines > template_lines {
-                format!("-{} lines", existing_lines - template_lines)
+            let preset_lines = preset_content.lines().count();
+            let diff_info = if preset_lines > existing_lines {
+                format!("+{} lines", preset_lines - existing_lines)
+            } else if existing_lines > preset_lines {
+                format!("-{} lines", existing_lines - preset_lines)
             } else {
                 "content differs".to_string()
             };

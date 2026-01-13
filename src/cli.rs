@@ -4,14 +4,14 @@ use clap::{Parser, Subcommand};
 #[command(name = "aidot")]
 #[command(version, about = "AI dotfiles - Manage LLM tool configurations")]
 #[command(long_about = "aidot (AI dotfiles) is a CLI tool that manages LLM tool configurations \
-across multiple AI coding assistants. It fetches tool-agnostic configuration templates \
+across multiple AI coding assistants. It fetches tool-agnostic configuration presets \
 from Git repositories and automatically converts them to the appropriate format for each \
 detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.).")]
 #[command(styles = get_styles())]
 #[command(after_help = "Examples:
-  aidot init                    Initialize a new template repository
-  aidot repo add common <url>   Register a template repository
-  aidot pull common             Apply template to all detected tools
+  aidot init                    Initialize a new preset repository
+  aidot repo add common <url>   Register a preset repository
+  aidot pull common             Apply preset to all detected tools
   aidot pull common --tools cursor,claude  Apply to specific tools only
   aidot detect                  Show installed LLM tools
   aidot status                  Show current configuration status")]
@@ -61,17 +61,17 @@ fn get_styles() -> clap::builder::Styles {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Initialize a new template repository
+    /// Initialize a new preset repository
     Init {
-        /// Create template from existing LLM configurations
+        /// Create preset from existing LLM configurations
         #[arg(long)]
         from_existing: bool,
 
-        /// Interactive template creation
+        /// Interactive preset creation
         #[arg(long)]
         interactive: bool,
 
-        /// Force overwrite if template already exists
+        /// Force overwrite if preset already exists
         #[arg(short, long)]
         force: bool,
 
@@ -80,11 +80,11 @@ pub enum Commands {
         path: Option<String>,
     },
 
-    /// Manage template repositories
+    /// Manage preset repositories
     #[command(subcommand)]
     Repo(RepoCommands),
 
-    /// Pull and apply template configurations
+    /// Pull and apply preset configurations
     Pull {
         /// Repository name or URL (if empty, applies all default repositories)
         #[arg(value_name = "REPO")]
@@ -117,7 +117,7 @@ pub enum Commands {
     #[command(subcommand)]
     Cache(CacheCommands),
 
-    /// Show diff between template and current config
+    /// Show diff between preset and current config
     Diff {
         /// Repository name, local path, or Git URL
         #[arg(value_name = "REPO")]
@@ -127,7 +127,7 @@ pub enum Commands {
 
 #[derive(Subcommand, Debug)]
 pub enum RepoCommands {
-    /// Add a new template repository
+    /// Add a new preset repository
     Add {
         /// Repository name
         #[arg(value_name = "NAME")]
@@ -137,7 +137,7 @@ pub enum RepoCommands {
         #[arg(value_name = "URL_OR_PATH")]
         url: String,
 
-        /// Register as a local template (path will be converted to absolute path)
+        /// Register as a local preset (path will be converted to absolute path)
         #[arg(long)]
         local: bool,
 

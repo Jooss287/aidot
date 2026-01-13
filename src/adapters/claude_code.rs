@@ -1,6 +1,6 @@
-use super::traits::{ApplyResult, ConflictMode, PreviewResult, TemplateFile, TemplateFiles, ToolAdapter, write_with_conflict};
+use super::traits::{ApplyResult, ConflictMode, PreviewResult, PresetFile, PresetFiles, ToolAdapter, write_with_conflict};
 use crate::error::Result;
-use crate::template::config::MergeStrategy;
+use crate::preset::config::MergeStrategy;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,7 +31,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply rules files: rules/*.md → .claude/rules/
-    fn apply_rules(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_rules(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -51,14 +51,14 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply memory files: memory/*.md → .claude/CLAUDE.md (merged or replaced)
-    fn apply_memory(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_memory(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
 
         let claude_md = self.claude_dir().join("CLAUDE.md");
 
-        // Merge all memory files from template
+        // Merge all memory files from preset
         let mut content = String::new();
         for (i, file) in files.iter().enumerate() {
             if i > 0 {
@@ -90,7 +90,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply commands: commands/*.md → .claude/commands/
-    fn apply_commands(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_commands(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -110,7 +110,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply MCP configs: mcp/*.json → .claude/settings.local.json (mcpServers section)
-    fn apply_mcp(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_mcp(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -156,7 +156,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply hooks: hooks/*.json → .claude/hooks.json
-    fn apply_hooks(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_hooks(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -180,7 +180,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply agents: agents/*.md → .claude/agents/
-    fn apply_agents(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_agents(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -200,7 +200,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply skills: skills/*.ts → .claude/skills/
-    fn apply_skills(&self, files: &[TemplateFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_skills(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -220,7 +220,7 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply settings: settings/*.json → .claude/settings.local.json (merged or replaced)
-    fn apply_settings(&self, files: &[TemplateFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_settings(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -290,7 +290,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
     fn apply(
         &self,
-        template_files: &TemplateFiles,
+        preset_files: &PresetFiles,
         _target_dir: &Path,
         conflict_mode: ConflictMode,
     ) -> Result<ApplyResult> {
@@ -300,21 +300,21 @@ impl ToolAdapter for ClaudeCodeAdapter {
         let mut mode = conflict_mode;
 
         // Apply each section with their merge strategies
-        self.apply_rules(&template_files.rules, &mut result, &mut mode)?;
-        self.apply_memory(&template_files.memory, &template_files.memory_strategy, &mut result, &mut mode)?;
-        self.apply_commands(&template_files.commands, &mut result, &mut mode)?;
-        self.apply_mcp(&template_files.mcp, &template_files.mcp_strategy, &mut result, &mut mode)?;
-        self.apply_hooks(&template_files.hooks, &mut result, &mut mode)?;
-        self.apply_agents(&template_files.agents, &mut result, &mut mode)?;
-        self.apply_skills(&template_files.skills, &mut result, &mut mode)?;
-        self.apply_settings(&template_files.settings, &template_files.settings_strategy, &mut result, &mut mode)?;
+        self.apply_rules(&preset_files.rules, &mut result, &mut mode)?;
+        self.apply_memory(&preset_files.memory, &preset_files.memory_strategy, &mut result, &mut mode)?;
+        self.apply_commands(&preset_files.commands, &mut result, &mut mode)?;
+        self.apply_mcp(&preset_files.mcp, &preset_files.mcp_strategy, &mut result, &mut mode)?;
+        self.apply_hooks(&preset_files.hooks, &mut result, &mut mode)?;
+        self.apply_agents(&preset_files.agents, &mut result, &mut mode)?;
+        self.apply_skills(&preset_files.skills, &mut result, &mut mode)?;
+        self.apply_settings(&preset_files.settings, &preset_files.settings_strategy, &mut result, &mut mode)?;
 
         Ok(result)
     }
 
     fn preview(
         &self,
-        template_files: &TemplateFiles,
+        preset_files: &PresetFiles,
         _target_dir: &Path,
         conflict_mode: ConflictMode,
     ) -> PreviewResult {
@@ -324,7 +324,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         let skip_existing = conflict_mode == ConflictMode::Skip;
 
         // Rules
-        for file in &template_files.rules {
+        for file in &preset_files.rules {
             let target = format!(".claude/rules/{}", file.relative_path.replace("rules/", ""));
             let target_path = self.claude_dir().join("rules").join(file.relative_path.replace("rules/", ""));
             if target_path.exists() {
@@ -339,7 +339,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Memory
-        if !template_files.memory.is_empty() {
+        if !preset_files.memory.is_empty() {
             if claude_md.exists() {
                 if skip_existing {
                     result.add_would_skip(".claude/CLAUDE.md".to_string());
@@ -352,7 +352,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Commands
-        for file in &template_files.commands {
+        for file in &preset_files.commands {
             let filename = file.relative_path.replace("commands/", "");
             let target = format!(".claude/commands/{}", filename);
             let target_path = self.claude_dir().join("commands").join(&filename);
@@ -368,7 +368,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // MCP
-        if !template_files.mcp.is_empty() {
+        if !preset_files.mcp.is_empty() {
             if settings_file.exists() {
                 if skip_existing {
                     result.add_would_skip(".claude/settings.local.json".to_string());
@@ -381,7 +381,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Hooks
-        if !template_files.hooks.is_empty() {
+        if !preset_files.hooks.is_empty() {
             let hooks_file = self.claude_dir().join("hooks.json");
             if hooks_file.exists() {
                 if skip_existing {
@@ -395,7 +395,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Agents
-        for file in &template_files.agents {
+        for file in &preset_files.agents {
             let filename = file.relative_path.replace("agents/", "");
             let target = format!(".claude/agents/{}", filename);
             let target_path = self.claude_dir().join("agents").join(&filename);
@@ -411,7 +411,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Skills
-        for file in &template_files.skills {
+        for file in &preset_files.skills {
             let filename = file.relative_path.replace("skills/", "");
             let target = format!(".claude/skills/{}", filename);
             let target_path = self.claude_dir().join("skills").join(&filename);
@@ -427,7 +427,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
         }
 
         // Settings
-        if !template_files.settings.is_empty() {
+        if !preset_files.settings.is_empty() {
             if settings_file.exists() {
                 if skip_existing {
                     result.add_would_skip(".claude/settings.local.json".to_string());
@@ -481,9 +481,9 @@ mod tests {
     fn test_apply_rules() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             rules: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "rules/code-style.md".to_string(),
                     content: "# Code Style Rules".to_string(),
                 },
@@ -491,7 +491,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert_eq!(result.created.len(), 1);
         assert!(result.created[0].contains("code-style.md"));
@@ -506,9 +506,9 @@ mod tests {
     fn test_apply_memory_new_file() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             memory: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "memory/context.md".to_string(),
                     content: "# Project Context".to_string(),
                 },
@@ -516,7 +516,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("CLAUDE.md")));
 
@@ -532,9 +532,9 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
         fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             memory: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "memory/new.md".to_string(),
                     content: "# New Content".to_string(),
                 },
@@ -543,7 +543,7 @@ mod tests {
             ..Default::default()
         };
 
-        adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(content.contains("# Existing Content"));
@@ -558,9 +558,9 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
         fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             memory: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "memory/new.md".to_string(),
                     content: "# New Content Only".to_string(),
                 },
@@ -569,7 +569,7 @@ mod tests {
             ..Default::default()
         };
 
-        adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(!content.contains("# Existing Content"));
@@ -580,9 +580,9 @@ mod tests {
     fn test_apply_commands() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             commands: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "commands/build.md".to_string(),
                     content: "# Build Command".to_string(),
                 },
@@ -590,7 +590,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.apply(&template_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("build.md")));
 
@@ -602,15 +602,15 @@ mod tests {
     fn test_preview_creates() {
         let (_temp_dir, adapter) = create_test_adapter();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             rules: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "rules/test.md".to_string(),
                     content: "# Test".to_string(),
                 },
             ],
             memory: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "memory/ctx.md".to_string(),
                     content: "# Context".to_string(),
                 },
@@ -618,7 +618,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, Path::new("."), ConflictMode::Force);
+        let result = adapter.preview(&preset_files, Path::new("."), ConflictMode::Force);
 
         assert!(result.has_changes());
         assert!(!result.would_create.is_empty());
@@ -632,9 +632,9 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
         fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "existing").unwrap();
 
-        let template_files = TemplateFiles {
+        let preset_files = PresetFiles {
             memory: vec![
-                TemplateFile {
+                PresetFile {
                     relative_path: "memory/new.md".to_string(),
                     content: "# New".to_string(),
                 },
@@ -642,7 +642,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = adapter.preview(&template_files, temp_dir.path(), ConflictMode::Force);
+        let result = adapter.preview(&preset_files, temp_dir.path(), ConflictMode::Force);
 
         assert!(result.would_update.iter().any(|f| f.path.contains("CLAUDE.md")));
     }
