@@ -9,8 +9,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  check-ci:
+    name: Check CI Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CI to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: Check CI Status
+          allowed-conclusions: success
+
   build:
     name: Build ${{ matrix.target }}
+    needs: check-ci
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -95,7 +109,31 @@ jobs:
         with:
           files: artifacts/**/*
           generate_release_notes: true
+          append_body: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Installation
+
+            ### Linux/macOS (Recommended)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.sh | bash
+            ```
+
+            ### Windows (PowerShell)
+            ```powershell
+            irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.ps1 | iex
+            ```
+
+            ### Manual Download
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | Linux | x86_64 | `aidot-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` |
+            | Linux | ARM64 | `aidot-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` |
+            | macOS | Intel | `aidot-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz` |
+            | macOS | Apple Silicon | `aidot-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz` |
+            | Windows | x86_64 | `aidot-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` |
+
+            ---
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

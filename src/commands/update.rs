@@ -124,7 +124,11 @@ pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
     // Check if it's a prerelease
     let is_prerelease = latest_version.contains('-');
     let version_display = if is_prerelease {
-        format!("{} {}", latest_version.green().bold(), "(prerelease)".yellow())
+        format!(
+            "{} {}",
+            latest_version.green().bold(),
+            "(prerelease)".yellow()
+        )
     } else {
         latest_version.green().bold().to_string()
     };
