@@ -111,6 +111,17 @@ pub enum Commands {
         #[arg(value_name = "REPO")]
         repository: String,
     },
+
+    /// Update aidot to the latest version
+    Update {
+        /// Only check for updates without installing
+        #[arg(long)]
+        check: bool,
+
+        /// Include prerelease versions (beta, alpha, rc)
+        #[arg(long)]
+        prerelease: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

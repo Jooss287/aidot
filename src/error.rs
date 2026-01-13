@@ -43,6 +43,9 @@ pub enum AidotError {
 
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("Update error: {0}")]
+    UpdateError(String),
 }
 
 /// Result type alias for aidot operations

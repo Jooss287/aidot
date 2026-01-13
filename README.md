@@ -28,7 +28,7 @@
 
 ```bash
 # 설치 (macOS/Linux)
-curl -fsSL https://raw.githubusercontent.com/USER/aidot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.sh | bash
 
 # 설치된 LLM 도구 확인
 aidot detect
@@ -48,12 +48,12 @@ aidot pull team
 
 **macOS / Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/USER/aidot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/USER/aidot/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/install.ps1 | iex
 ```
 
 ### GitHub Releases에서 수동 설치

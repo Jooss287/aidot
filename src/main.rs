@@ -261,6 +261,10 @@ fn run() -> Result<()> {
         Commands::Diff { repository } => {
             commands::show_diff(repository)?;
         }
+
+        Commands::Update { check, prerelease } => {
+            commands::check_update(check, prerelease)?;
+        }
     }
 
     Ok(())

@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 REPO="Jooss287/aidot"
-INSTALL_DIR="${AIDOT_INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_DIR="${AIDOT_INSTALL_DIR:-$HOME/.aidot/bin}"
 BINARY_NAME="aidot"
 
 # Colors
@@ -65,7 +65,13 @@ detect_platform() {
 # Get latest release version
 get_latest_version() {
     local version
-    version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    local prerelease="${1:-false}"
+
+    if [ "$prerelease" = "true" ]; then
+        version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+        version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
 
     if [ -z "$version" ]; then
         error "Failed to get latest version"
@@ -77,9 +83,10 @@ get_latest_version() {
 # Download and install
 install() {
     local platform version download_url temp_dir archive_name
+    local prerelease="${1:-false}"
 
     platform=$(detect_platform)
-    version=$(get_latest_version)
+    version=$(get_latest_version "$prerelease")
 
     info "Installing aidot ${version} for ${platform}..."
 
@@ -140,15 +147,25 @@ uninstall() {
 }
 
 # Main
-case "${1:-install}" in
+COMMAND="${1:-install}"
+PRERELEASE="false"
+
+# Check for --prerelease flag
+for arg in "$@"; do
+    if [ "$arg" = "--prerelease" ] || [ "$arg" = "-prerelease" ]; then
+        PRERELEASE="true"
+    fi
+done
+
+case "$COMMAND" in
     install)
-        install
+        install "$PRERELEASE"
         ;;
     uninstall)
         uninstall
         ;;
     *)
-        echo "Usage: $0 [install|uninstall]"
+        echo "Usage: $0 [install|uninstall] [--prerelease]"
         exit 1
         ;;
 esac

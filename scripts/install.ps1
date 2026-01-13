@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $Repo = "Jooss287/aidot"
 $BinaryName = "aidot.exe"
-$InstallDir = if ($env:AIDOT_INSTALL_DIR) { $env:AIDOT_INSTALL_DIR } else { "$env:USERPROFILE\.local\bin" }
+$InstallDir = if ($env:AIDOT_INSTALL_DIR) { $env:AIDOT_INSTALL_DIR } else { "$env:USERPROFILE\.aidot\bin" }
 
 function Write-Info {
     param([string]$Message)
@@ -28,9 +28,16 @@ function Write-Error {
 }
 
 function Get-LatestVersion {
+    param([switch]$Prerelease)
+
     try {
-        $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
-        return $response.tag_name
+        if ($Prerelease) {
+            $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases"
+            return $response[0].tag_name
+        } else {
+            $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
+            return $response.tag_name
+        }
     }
     catch {
         Write-Error "Failed to get latest version: $_"
@@ -38,8 +45,10 @@ function Get-LatestVersion {
 }
 
 function Install-Aidot {
+    param([switch]$Prerelease)
+
     $platform = "x86_64-pc-windows-msvc"
-    $version = Get-LatestVersion
+    $version = Get-LatestVersion -Prerelease:$Prerelease
 
     Write-Info "Installing aidot $version for $platform..."
 
@@ -120,12 +129,13 @@ function Uninstall-Aidot {
 
 # Main
 $command = if ($args.Count -gt 0) { $args[0] } else { "install" }
+$includePrerelease = $args -contains "-Prerelease" -or $args -contains "--prerelease"
 
 switch ($command) {
-    "install" { Install-Aidot }
+    "install" { Install-Aidot -Prerelease:$includePrerelease }
     "uninstall" { Uninstall-Aidot }
     default {
-        Write-Host "Usage: install.ps1 [install|uninstall]"
+        Write-Host "Usage: install.ps1 [install|uninstall] [--prerelease]"
         exit 1
     }
 }

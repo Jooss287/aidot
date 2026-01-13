@@ -2,6 +2,14 @@
 name = "aidot"
 version = "0.0.0"
 edition = "2021"
+authors = ["Jooss287"]
+description = "AI dotfiles - Manage LLM tool configurations across multiple AI coding assistants"
+license = "MIT"
+repository = "https://github.com/Jooss287/aidot"
+homepage = "https://github.com/Jooss287/aidot"
+readme = "README.md"
+keywords = ["llm", "cli", "dotfiles", "ai", "config"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # CLI
@@ -28,6 +36,15 @@ walkdir = "2.4"
 
 # Utilities
 dirs = "5.0"
+
+# Self-update
+self_update = { version = "0.42", default-features = false, features = [
+    "archive-tar",
+    "archive-zip",
+    "compression-flate2",
+    "compression-zip-deflate",
+    "rustls"
+] }
 
 [dev-dependencies]
 tempfile = "3.10"
