@@ -1,4 +1,7 @@
-use super::traits::{ApplyResult, ConflictMode, PreviewResult, PresetFile, PresetFiles, ToolAdapter, write_with_conflict};
+use super::traits::{
+    write_with_conflict, ApplyResult, ConflictMode, PresetFile, PresetFiles, PreviewResult,
+    ToolAdapter,
+};
 use crate::error::Result;
 use crate::preset::config::MergeStrategy;
 use std::fs;
@@ -31,7 +34,12 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply rules files: rules/*.md → .claude/rules/
-    fn apply_rules(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_rules(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -51,7 +59,13 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply memory files: memory/*.md → .claude/CLAUDE.md (merged or replaced)
-    fn apply_memory(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_memory(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -78,7 +92,13 @@ impl ClaudeCodeAdapter {
                 }
                 MergeStrategy::Replace => {
                     // For replace, check conflict
-                    *mode = write_with_conflict(&claude_md, &content, *mode, result, ".claude/CLAUDE.md")?;
+                    *mode = write_with_conflict(
+                        &claude_md,
+                        &content,
+                        *mode,
+                        result,
+                        ".claude/CLAUDE.md",
+                    )?;
                 }
             }
         } else {
@@ -90,7 +110,12 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply commands: commands/*.md → .claude/commands/
-    fn apply_commands(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_commands(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -110,7 +135,13 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply MCP configs: mcp/*.json → .claude/settings.local.json (mcpServers section)
-    fn apply_mcp(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_mcp(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -134,29 +165,38 @@ impl ClaudeCodeAdapter {
         };
 
         // Ensure mcpServers object exists
-        if !settings.get("mcpServers").is_some() {
+        if settings.get("mcpServers").is_none() {
             settings["mcpServers"] = serde_json::json!({});
         }
 
         // Merge MCP configurations
         for file in files {
             let mcp_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let server_name = file.relative_path
-                .replace("mcp/", "")
-                .replace(".json", "");
+            let server_name = file.relative_path.replace("mcp/", "").replace(".json", "");
 
             settings["mcpServers"][server_name] = mcp_config;
         }
 
         let json_str = serde_json::to_string_pretty(&settings)?;
         // MCP configs are always merged, so treat as update
-        *mode = write_with_conflict(&settings_file, &json_str, *mode, result, ".claude/settings.local.json")?;
+        *mode = write_with_conflict(
+            &settings_file,
+            &json_str,
+            *mode,
+            result,
+            ".claude/settings.local.json",
+        )?;
 
         Ok(())
     }
 
     /// Apply hooks: hooks/*.json → .claude/hooks.json
-    fn apply_hooks(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_hooks(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -166,7 +206,8 @@ impl ClaudeCodeAdapter {
         // Merge all hooks into one JSON object
         let mut hooks = serde_json::Map::new();
         for file in files {
-            let hook_name = file.relative_path
+            let hook_name = file
+                .relative_path
                 .replace("hooks/", "")
                 .replace(".json", "");
             let hook_config: serde_json::Value = serde_json::from_str(&file.content)?;
@@ -180,7 +221,12 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply agents: agents/*.md → .claude/agents/
-    fn apply_agents(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_agents(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -200,7 +246,12 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply skills: skills/*.ts → .claude/skills/
-    fn apply_skills(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_skills(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -220,7 +271,13 @@ impl ClaudeCodeAdapter {
     }
 
     /// Apply settings: settings/*.json → .claude/settings.local.json (merged or replaced)
-    fn apply_settings(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_settings(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -256,7 +313,13 @@ impl ClaudeCodeAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&settings)?;
-        *mode = write_with_conflict(&settings_file, &json_str, *mode, result, ".claude/settings.local.json")?;
+        *mode = write_with_conflict(
+            &settings_file,
+            &json_str,
+            *mode,
+            result,
+            ".claude/settings.local.json",
+        )?;
 
         Ok(())
     }
@@ -276,16 +339,14 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Check if claude command exists
         #[cfg(target_os = "windows")]
-        let check_cmd = std::process::Command::new("where")
-            .arg("claude")
-            .output();
+        let check_cmd = std::process::Command::new("where").arg("claude").output();
 
         #[cfg(not(target_os = "windows"))]
-        let check_cmd = std::process::Command::new("which")
-            .arg("claude")
-            .output();
+        let check_cmd = std::process::Command::new("which").arg("claude").output();
 
-        check_cmd.map(|output| output.status.success()).unwrap_or(false)
+        check_cmd
+            .map(|output| output.status.success())
+            .unwrap_or(false)
     }
 
     fn apply(
@@ -301,13 +362,28 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Apply each section with their merge strategies
         self.apply_rules(&preset_files.rules, &mut result, &mut mode)?;
-        self.apply_memory(&preset_files.memory, &preset_files.memory_strategy, &mut result, &mut mode)?;
+        self.apply_memory(
+            &preset_files.memory,
+            &preset_files.memory_strategy,
+            &mut result,
+            &mut mode,
+        )?;
         self.apply_commands(&preset_files.commands, &mut result, &mut mode)?;
-        self.apply_mcp(&preset_files.mcp, &preset_files.mcp_strategy, &mut result, &mut mode)?;
+        self.apply_mcp(
+            &preset_files.mcp,
+            &preset_files.mcp_strategy,
+            &mut result,
+            &mut mode,
+        )?;
         self.apply_hooks(&preset_files.hooks, &mut result, &mut mode)?;
         self.apply_agents(&preset_files.agents, &mut result, &mut mode)?;
         self.apply_skills(&preset_files.skills, &mut result, &mut mode)?;
-        self.apply_settings(&preset_files.settings, &preset_files.settings_strategy, &mut result, &mut mode)?;
+        self.apply_settings(
+            &preset_files.settings,
+            &preset_files.settings_strategy,
+            &mut result,
+            &mut mode,
+        )?;
 
         Ok(result)
     }
@@ -326,7 +402,10 @@ impl ToolAdapter for ClaudeCodeAdapter {
         // Rules
         for file in &preset_files.rules {
             let target = format!(".claude/rules/{}", file.relative_path.replace("rules/", ""));
-            let target_path = self.claude_dir().join("rules").join(file.relative_path.replace("rules/", ""));
+            let target_path = self
+                .claude_dir()
+                .join("rules")
+                .join(file.relative_path.replace("rules/", ""));
             if target_path.exists() {
                 if skip_existing {
                     result.add_would_skip(target);
@@ -373,10 +452,14 @@ impl ToolAdapter for ClaudeCodeAdapter {
                 if skip_existing {
                     result.add_would_skip(".claude/settings.local.json".to_string());
                 } else {
-                    result.add_would_update(".claude/settings.local.json".to_string(), "mcp".to_string());
+                    result.add_would_update(
+                        ".claude/settings.local.json".to_string(),
+                        "mcp".to_string(),
+                    );
                 }
             } else {
-                result.add_would_create(".claude/settings.local.json".to_string(), "mcp".to_string());
+                result
+                    .add_would_create(".claude/settings.local.json".to_string(), "mcp".to_string());
             }
         }
 
@@ -432,10 +515,16 @@ impl ToolAdapter for ClaudeCodeAdapter {
                 if skip_existing {
                     result.add_would_skip(".claude/settings.local.json".to_string());
                 } else {
-                    result.add_would_update(".claude/settings.local.json".to_string(), "settings".to_string());
+                    result.add_would_update(
+                        ".claude/settings.local.json".to_string(),
+                        "settings".to_string(),
+                    );
                 }
             } else {
-                result.add_would_create(".claude/settings.local.json".to_string(), "settings".to_string());
+                result.add_would_create(
+                    ".claude/settings.local.json".to_string(),
+                    "settings".to_string(),
+                );
             }
         }
 
@@ -482,16 +571,16 @@ mod tests {
         let (temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/code-style.md".to_string(),
-                    content: "# Code Style Rules".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/code-style.md".to_string(),
+                content: "# Code Style Rules".to_string(),
+            }],
             ..Default::default()
         };
 
-        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         assert_eq!(result.created.len(), 1);
         assert!(result.created[0].contains("code-style.md"));
@@ -499,7 +588,10 @@ mod tests {
         // Verify file was created
         let created_file = temp_dir.path().join(".claude/rules/code-style.md");
         assert!(created_file.exists());
-        assert_eq!(fs::read_to_string(created_file).unwrap(), "# Code Style Rules");
+        assert_eq!(
+            fs::read_to_string(created_file).unwrap(),
+            "# Code Style Rules"
+        );
     }
 
     #[test]
@@ -507,16 +599,16 @@ mod tests {
         let (temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            memory: vec![
-                PresetFile {
-                    relative_path: "memory/context.md".to_string(),
-                    content: "# Project Context".to_string(),
-                },
-            ],
+            memory: vec![PresetFile {
+                relative_path: "memory/context.md".to_string(),
+                content: "# Project Context".to_string(),
+            }],
             ..Default::default()
         };
 
-        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("CLAUDE.md")));
 
@@ -530,20 +622,24 @@ mod tests {
 
         // Create existing CLAUDE.md
         fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
-        fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
+        fs::write(
+            temp_dir.path().join(".claude/CLAUDE.md"),
+            "# Existing Content",
+        )
+        .unwrap();
 
         let preset_files = PresetFiles {
-            memory: vec![
-                PresetFile {
-                    relative_path: "memory/new.md".to_string(),
-                    content: "# New Content".to_string(),
-                },
-            ],
+            memory: vec![PresetFile {
+                relative_path: "memory/new.md".to_string(),
+                content: "# New Content".to_string(),
+            }],
             memory_strategy: MergeStrategy::Concat,
             ..Default::default()
         };
 
-        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(content.contains("# Existing Content"));
@@ -556,20 +652,24 @@ mod tests {
 
         // Create existing CLAUDE.md
         fs::create_dir_all(temp_dir.path().join(".claude")).unwrap();
-        fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "# Existing Content").unwrap();
+        fs::write(
+            temp_dir.path().join(".claude/CLAUDE.md"),
+            "# Existing Content",
+        )
+        .unwrap();
 
         let preset_files = PresetFiles {
-            memory: vec![
-                PresetFile {
-                    relative_path: "memory/new.md".to_string(),
-                    content: "# New Content Only".to_string(),
-                },
-            ],
+            memory: vec![PresetFile {
+                relative_path: "memory/new.md".to_string(),
+                content: "# New Content Only".to_string(),
+            }],
             memory_strategy: MergeStrategy::Replace,
             ..Default::default()
         };
 
-        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
         assert!(!content.contains("# Existing Content"));
@@ -581,16 +681,16 @@ mod tests {
         let (temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            commands: vec![
-                PresetFile {
-                    relative_path: "commands/build.md".to_string(),
-                    content: "# Build Command".to_string(),
-                },
-            ],
+            commands: vec![PresetFile {
+                relative_path: "commands/build.md".to_string(),
+                content: "# Build Command".to_string(),
+            }],
             ..Default::default()
         };
 
-        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("build.md")));
 
@@ -603,18 +703,14 @@ mod tests {
         let (_temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/test.md".to_string(),
-                    content: "# Test".to_string(),
-                },
-            ],
-            memory: vec![
-                PresetFile {
-                    relative_path: "memory/ctx.md".to_string(),
-                    content: "# Context".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/test.md".to_string(),
+                content: "# Test".to_string(),
+            }],
+            memory: vec![PresetFile {
+                relative_path: "memory/ctx.md".to_string(),
+                content: "# Context".to_string(),
+            }],
             ..Default::default()
         };
 
@@ -633,17 +729,18 @@ mod tests {
         fs::write(temp_dir.path().join(".claude/CLAUDE.md"), "existing").unwrap();
 
         let preset_files = PresetFiles {
-            memory: vec![
-                PresetFile {
-                    relative_path: "memory/new.md".to_string(),
-                    content: "# New".to_string(),
-                },
-            ],
+            memory: vec![PresetFile {
+                relative_path: "memory/new.md".to_string(),
+                content: "# New".to_string(),
+            }],
             ..Default::default()
         };
 
         let result = adapter.preview(&preset_files, temp_dir.path(), ConflictMode::Force);
 
-        assert!(result.would_update.iter().any(|f| f.path.contains("CLAUDE.md")));
+        assert!(result
+            .would_update
+            .iter()
+            .any(|f| f.path.contains("CLAUDE.md")));
     }
 }

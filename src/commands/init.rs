@@ -8,14 +8,14 @@ use walkdir::WalkDir;
 /// Extracted file info from existing LLM tool configurations
 #[derive(Debug, Default)]
 struct ExtractedFiles {
-    rules: Vec<(String, String)>,      // (filename, content)
-    memory: Vec<(String, String)>,     // (filename, content)
-    commands: Vec<(String, String)>,   // (filename, content)
-    mcp: Vec<(String, String)>,        // (filename, content)
-    hooks: Vec<(String, String)>,      // (filename, content)
-    agents: Vec<(String, String)>,     // (filename, content)
-    skills: Vec<(String, String)>,     // (filename, content)
-    settings: Vec<(String, String)>,   // (filename, content)
+    rules: Vec<(String, String)>,    // (filename, content)
+    memory: Vec<(String, String)>,   // (filename, content)
+    commands: Vec<(String, String)>, // (filename, content)
+    mcp: Vec<(String, String)>,      // (filename, content)
+    hooks: Vec<(String, String)>,    // (filename, content)
+    agents: Vec<(String, String)>,   // (filename, content)
+    skills: Vec<(String, String)>,   // (filename, content)
+    settings: Vec<(String, String)>, // (filename, content)
 }
 
 impl ExtractedFiles {
@@ -73,26 +73,14 @@ fn init_empty_preset(path: &Path) -> Result<()> {
 
     // Create directory structure
     let directories = vec![
-        "rules",
-        "memory",
-        "commands",
-        "mcp",
-        "hooks",
-        "agents",
-        "skills",
-        "settings",
+        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings",
     ];
 
     for dir in &directories {
         let dir_path = path.join(dir);
         if !dir_path.exists() {
             fs::create_dir_all(&dir_path)?;
-            println!(
-                "  {} {} {}/",
-                "✓".green(),
-                "Created".green(),
-                dir.white()
-            );
+            println!("  {} {} {}/", "✓".green(), "Created".green(), dir.white());
         }
     }
 
@@ -298,7 +286,10 @@ fn write_extracted_files(
 }
 
 /// Extract configurations from Claude Code (.claude/)
-fn extract_claude_code(source_path: &Path, extracted: &mut ExtractedFiles) -> Result<Option<usize>> {
+fn extract_claude_code(
+    source_path: &Path,
+    extracted: &mut ExtractedFiles,
+) -> Result<Option<usize>> {
     let claude_dir = source_path.join(".claude");
     if !claude_dir.exists() {
         return Ok(None);
@@ -412,7 +403,9 @@ fn extract_claude_code(source_path: &Path, extracted: &mut ExtractedFiles) -> Re
     let hooks_file = claude_dir.join("hooks.json");
     if hooks_file.exists() {
         if let Ok(content) = fs::read_to_string(&hooks_file) {
-            extracted.hooks.push(("claude-hooks.json".to_string(), content));
+            extracted
+                .hooks
+                .push(("claude-hooks.json".to_string(), content));
             count += 1;
         }
     }
@@ -684,14 +677,11 @@ fn extract_copilot(source_path: &Path, extracted: &mut ExtractedFiles) -> Result
         if let Ok(content) = fs::read_to_string(&mcp_file) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 // Check both "mcpServers" and "servers" keys
-                let servers = json
-                    .get("mcpServers")
-                    .or_else(|| json.get("servers"));
+                let servers = json.get("mcpServers").or_else(|| json.get("servers"));
 
                 if let Some(servers_obj) = servers.and_then(|s| s.as_object()) {
                     for (name, config) in servers_obj {
-                        let mcp_content =
-                            serde_json::to_string_pretty(config).unwrap_or_default();
+                        let mcp_content = serde_json::to_string_pretty(config).unwrap_or_default();
                         extracted
                             .mcp
                             .push((format!("vscode-{}.json", name), mcp_content));

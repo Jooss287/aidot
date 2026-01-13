@@ -1,7 +1,7 @@
 use crate::adapters::{detect_tools, ConflictMode};
 use crate::error::Result;
-use crate::repository;
 use crate::preset::parse_preset;
+use crate::repository;
 use colored::Colorize;
 
 /// Pull and apply preset configurations
@@ -39,10 +39,7 @@ pub fn pull_preset(
     let mut tools = detect_tools(&target_dir);
 
     if tools.is_empty() {
-        println!(
-            "{}",
-            "No LLM tools detected in current directory.".yellow()
-        );
+        println!("{}", "No LLM tools detected in current directory.".yellow());
         println!("Run '{}' to see detection details.", "aidot detect".cyan());
         return Ok(());
     }
@@ -86,21 +83,14 @@ pub fn pull_preset(
     println!();
 
     if dry_run {
-        println!(
-            "{}",
-            "═══ DRY RUN MODE ═══".yellow().bold()
-        );
+        println!("{}", "═══ DRY RUN MODE ═══".yellow().bold());
         println!(
             "{}\n",
             "No files will be modified. Showing what would happen:".yellow()
         );
 
         for tool in &tools {
-            println!(
-                "{} {}",
-                "Preview for:".cyan(),
-                tool.name().white().bold()
-            );
+            println!("{} {}", "Preview for:".cyan(), tool.name().white().bold());
 
             let preview = tool.preview(&preset_files, &target_dir, conflict_mode);
 
@@ -141,20 +131,13 @@ pub fn pull_preset(
             println!();
         }
 
-        println!(
-            "{}",
-            "Run without --dry-run to apply these changes.".cyan()
-        );
+        println!("{}", "Run without --dry-run to apply these changes.".cyan());
         return Ok(());
     }
 
     // Apply to each detected tool
     for tool in tools {
-        println!(
-            "{} {}",
-            "Applying to".cyan(),
-            tool.name().white().bold()
-        );
+        println!("{} {}", "Applying to".cyan(), tool.name().white().bold());
 
         let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
 

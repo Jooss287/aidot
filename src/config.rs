@@ -128,7 +128,9 @@ impl Config {
 
     /// Set default flag for a repository
     pub fn set_default(&mut self, name: &str, default: bool) -> Result<()> {
-        let repo = self.repositories.iter_mut()
+        let repo = self
+            .repositories
+            .iter_mut()
             .find(|r| r.name == name)
             .ok_or_else(|| AidotError::RepositoryNotFound(name.to_string()))?;
 

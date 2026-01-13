@@ -219,8 +219,14 @@ mod tests {
         assert!(config.settings.is_some());
 
         // Check merge strategies
-        assert_eq!(config.rules.as_ref().unwrap().merge_strategy, MergeStrategy::Concat);
-        assert_eq!(config.commands.as_ref().unwrap().merge_strategy, MergeStrategy::Replace);
+        assert_eq!(
+            config.rules.as_ref().unwrap().merge_strategy,
+            MergeStrategy::Concat
+        );
+        assert_eq!(
+            config.commands.as_ref().unwrap().merge_strategy,
+            MergeStrategy::Replace
+        );
     }
 
     #[test]
@@ -289,6 +295,9 @@ mod tests {
 
         assert_eq!(deserialized.name, "test");
         assert_eq!(deserialized.version, "2.0.0");
-        assert_eq!(deserialized.description, Some("Test description".to_string()));
+        assert_eq!(
+            deserialized.description,
+            Some("Test description".to_string())
+        );
     }
 }

@@ -1,8 +1,8 @@
 use crate::adapters::detector::detect_tools;
 use crate::adapters::traits::PresetFiles;
 use crate::error::Result;
-use crate::repository::resolve_repository_source;
 use crate::preset::parser::parse_preset;
+use crate::repository::resolve_repository_source;
 use colored::Colorize;
 use std::fs;
 use std::path::Path;
@@ -170,7 +170,12 @@ fn compute_claude_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = claude_dir.join("commands").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("commands/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("commands/{}", filename),
+            result,
+        );
     }
 
     // MCP: preset mcp/*.json → .claude/settings.local.json (mcpServers section)
@@ -186,7 +191,9 @@ fn compute_claude_diff(
                             Some(format!("{} MCP servers in preset", preset.mcp.len())),
                         ));
                     } else {
-                        result.new_files.push("settings.local.json (mcpServers section)".to_string());
+                        result
+                            .new_files
+                            .push("settings.local.json (mcpServers section)".to_string());
                     }
                 }
             }
@@ -208,7 +215,12 @@ fn compute_claude_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = claude_dir.join("agents").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("agents/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("agents/{}", filename),
+            result,
+        );
     }
 
     // Skills
@@ -218,7 +230,12 @@ fn compute_claude_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = claude_dir.join("skills").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("skills/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("skills/{}", filename),
+            result,
+        );
     }
 
     Ok(())
@@ -245,7 +262,12 @@ fn compute_cursor_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = cursor_dir.join("commands").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("commands/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("commands/{}", filename),
+            result,
+        );
     }
 
     // MCP
@@ -267,7 +289,12 @@ fn compute_cursor_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = cursor_dir.join("agents").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("agents/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("agents/{}", filename),
+            result,
+        );
     }
 
     // Skills
@@ -277,7 +304,12 @@ fn compute_cursor_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = cursor_dir.join("skills").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("skills/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("skills/{}", filename),
+            result,
+        );
     }
 
     Ok(())
@@ -305,7 +337,12 @@ fn compute_copilot_diff(
             .to_string_lossy();
         let prompt_name = filename.replace(".md", ".prompt.md");
         let target_file = github_dir.join("prompts").join(&prompt_name);
-        compare_file(&target_file, &file.content, &format!("prompts/{}", prompt_name), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("prompts/{}", prompt_name),
+            result,
+        );
     }
 
     // MCP → .vscode/mcp.json
@@ -322,7 +359,12 @@ fn compute_copilot_diff(
             .to_string_lossy();
         let agent_name = filename.replace(".md", ".agent.md");
         let target_file = github_dir.join("agents").join(&agent_name);
-        compare_file(&target_file, &file.content, &format!("agents/{}", agent_name), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("agents/{}", agent_name),
+            result,
+        );
     }
 
     // Skills → .github/skills/
@@ -332,14 +374,24 @@ fn compute_copilot_diff(
             .unwrap_or_default()
             .to_string_lossy();
         let target_file = github_dir.join("skills").join(&*filename);
-        compare_file(&target_file, &file.content, &format!("skills/{}", filename), result);
+        compare_file(
+            &target_file,
+            &file.content,
+            &format!("skills/{}", filename),
+            result,
+        );
     }
 
     Ok(())
 }
 
 /// Compare a single file
-fn compare_file(target_path: &Path, preset_content: &str, display_name: &str, result: &mut DiffResult) {
+fn compare_file(
+    target_path: &Path,
+    preset_content: &str,
+    display_name: &str,
+    result: &mut DiffResult,
+) {
     if !target_path.exists() {
         result.new_files.push(display_name.to_string());
         return;
@@ -362,7 +414,9 @@ fn compare_file(target_path: &Path, preset_content: &str, display_name: &str, re
             } else {
                 "content differs".to_string()
             };
-            result.modified_files.push((display_name.to_string(), Some(diff_info)));
+            result
+                .modified_files
+                .push((display_name.to_string(), Some(diff_info)));
         }
     } else {
         result.new_files.push(display_name.to_string());
@@ -372,7 +426,10 @@ fn compare_file(target_path: &Path, preset_content: &str, display_name: &str, re
 /// Compare file existence only (for merged files)
 fn compare_file_exists(target_path: &Path, display_name: &str, result: &mut DiffResult) {
     if target_path.exists() {
-        result.modified_files.push((display_name.to_string(), Some("will be updated".to_string())));
+        result.modified_files.push((
+            display_name.to_string(),
+            Some("will be updated".to_string()),
+        ));
     } else {
         result.new_files.push(display_name.to_string());
     }

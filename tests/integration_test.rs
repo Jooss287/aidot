@@ -47,8 +47,16 @@ merge_strategy = "replace"
     fs::create_dir_all(dir.join("commands")).unwrap();
 
     // Create sample files
-    fs::write(dir.join("rules/test.md"), "# Test Rule\n\nThis is a test rule.").unwrap();
-    fs::write(dir.join("memory/context.md"), "# Context\n\nProject context info.").unwrap();
+    fs::write(
+        dir.join("rules/test.md"),
+        "# Test Rule\n\nThis is a test rule.",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("memory/context.md"),
+        "# Context\n\nProject context info.",
+    )
+    .unwrap();
     fs::write(dir.join("commands/build.md"), "# Build\n\nBuild command.").unwrap();
 }
 
@@ -72,11 +80,7 @@ fn test_init_with_force_overwrites() {
     run_aidot(&["init"], temp_dir.path());
 
     // Modify config
-    fs::write(
-        temp_dir.path().join(".aidot-config.toml"),
-        "# Modified",
-    )
-    .unwrap();
+    fs::write(temp_dir.path().join(".aidot-config.toml"), "# Modified").unwrap();
 
     // Second init with --force
     let output = run_aidot(&["init", "--force"], temp_dir.path());
@@ -119,7 +123,11 @@ fn test_pull_from_local_preset() {
         project_dir.path(),
     );
 
-    assert!(output.status.success(), "pull should succeed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "pull should succeed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Verify files were created
     assert!(project_dir.path().join(".claude").exists());
@@ -170,7 +178,10 @@ fn test_diff_command() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should show some diff output (new/modified/unchanged)
     assert!(
-        stdout.contains("new") || stdout.contains("modified") || stdout.contains("unchanged") || stdout.contains("Summary"),
+        stdout.contains("new")
+            || stdout.contains("modified")
+            || stdout.contains("unchanged")
+            || stdout.contains("Summary"),
         "diff output should contain status: {}",
         stdout
     );

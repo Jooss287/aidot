@@ -110,11 +110,7 @@ mod tests {
 
         // Create test structure
         fs::create_dir_all(preset_dir.join("rules")).unwrap();
-        fs::write(
-            preset_dir.join("rules/test.md"),
-            "# Test Rule",
-        )
-        .unwrap();
+        fs::write(preset_dir.join("rules/test.md"), "# Test Rule").unwrap();
 
         let files = parse_directory(preset_dir, "rules").unwrap();
         assert_eq!(files.len(), 1);

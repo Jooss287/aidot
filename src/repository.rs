@@ -73,7 +73,7 @@ fn url_to_repo_name(url: &str) -> String {
     // e.g., https://github.com/user/repo.git -> repo
     url.trim_end_matches(".git")
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or("temp-repo")
         .to_string()
 }
@@ -96,6 +96,9 @@ mod tests {
     fn test_url_to_repo_name() {
         assert_eq!(url_to_repo_name("https://github.com/user/repo.git"), "repo");
         assert_eq!(url_to_repo_name("https://github.com/user/repo"), "repo");
-        assert_eq!(url_to_repo_name("git@github.com:user/my-preset.git"), "my-preset");
+        assert_eq!(
+            url_to_repo_name("git@github.com:user/my-preset.git"),
+            "my-preset"
+        );
     }
 }

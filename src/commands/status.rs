@@ -147,7 +147,8 @@ pub fn show_status() -> Result<()> {
 
 /// Show contents of a directory
 fn show_dir_contents(dir: &Path, indent: &str) -> Result<()> {
-    let dir_name = dir.file_name()
+    let dir_name = dir
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| dir.display().to_string());
 
@@ -165,16 +166,9 @@ fn show_dir_contents(dir: &Path, indent: &str) -> Result<()> {
             );
             // Optionally show subdirectory contents (one level deep)
             if let Ok(subdir) = fs::read_dir(&path) {
-                for subentry in subdir.take(5) {
-                    if let Ok(subentry) = subentry {
-                        let subname = subentry.file_name().to_string_lossy().to_string();
-                        println!(
-                            "{}  {} {}",
-                            indent,
-                            "·".dimmed(),
-                            subname.dimmed()
-                        );
-                    }
+                for subentry in subdir.take(5).flatten() {
+                    let subname = subentry.file_name().to_string_lossy().to_string();
+                    println!("{}  {} {}", indent, "·".dimmed(), subname.dimmed());
                 }
             }
         } else {

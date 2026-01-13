@@ -40,10 +40,22 @@ pub fn detect_tools() -> Result<()> {
 
     if detected_count == 0 {
         println!("{}", "No LLM tools detected.".yellow());
-        println!("\n{}", "To use aidot, you need at least one supported LLM tool:".dimmed());
-        println!("  {} Create a {} directory or install {} CLI", "•".cyan(), ".claude".white(), "claude".white());
+        println!(
+            "\n{}",
+            "To use aidot, you need at least one supported LLM tool:".dimmed()
+        );
+        println!(
+            "  {} Create a {} directory or install {} CLI",
+            "•".cyan(),
+            ".claude".white(),
+            "claude".white()
+        );
         println!("  {} Use {} IDE", "•".cyan(), "Cursor".white());
-        println!("  {} Use VS Code with {}", "•".cyan(), "GitHub Copilot".white());
+        println!(
+            "  {} Use VS Code with {}",
+            "•".cyan(),
+            "GitHub Copilot".white()
+        );
     } else {
         println!(
             "{} {} {}",

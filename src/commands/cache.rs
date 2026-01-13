@@ -101,9 +101,8 @@ pub fn update_cache(repo_name: Option<String>, all: bool) -> Result<()> {
         );
     } else {
         eprintln!(
-            "{} {}",
-            "Error:".red().bold(),
-            "Specify a repository name or use --all"
+            "{} Specify a repository name or use --all",
+            "Error:".red().bold()
         );
         eprintln!(
             "{} {}",
@@ -123,4 +122,3 @@ pub fn clear_cache() -> Result<()> {
     println!("{} {}", "✓".green(), "All caches cleared".green().bold());
     Ok(())
 }
-

@@ -1,4 +1,7 @@
-use super::traits::{ApplyResult, ConflictMode, PreviewResult, PresetFile, PresetFiles, ToolAdapter, write_with_conflict};
+use super::traits::{
+    write_with_conflict, ApplyResult, ConflictMode, PresetFile, PresetFiles, PreviewResult,
+    ToolAdapter,
+};
 use crate::error::Result;
 use crate::preset::config::MergeStrategy;
 use std::fs;
@@ -45,7 +48,13 @@ impl CursorAdapter {
     }
 
     /// Apply rules files: rules/*.md → .cursorrules (merged or replaced)
-    fn apply_rules(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_rules(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -84,7 +93,13 @@ impl CursorAdapter {
             }
             MergeStrategy::Replace => {
                 // Replace may trigger conflict resolution
-                *mode = write_with_conflict(&cursorrules, &preset_content, *mode, result, ".cursorrules")?;
+                *mode = write_with_conflict(
+                    &cursorrules,
+                    &preset_content,
+                    *mode,
+                    result,
+                    ".cursorrules",
+                )?;
             }
         }
 
@@ -92,7 +107,13 @@ impl CursorAdapter {
     }
 
     /// Apply memory files: memory/*.md → .cursorrules (appended or replaced)
-    fn apply_memory(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_memory(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -105,7 +126,10 @@ impl CursorAdapter {
             if i > 0 {
                 memory_content.push_str("\n\n---\n\n");
             }
-            memory_content.push_str(&format!("## {}\n\n", file.relative_path.replace("memory/", "").replace(".md", "")));
+            memory_content.push_str(&format!(
+                "## {}\n\n",
+                file.relative_path.replace("memory/", "").replace(".md", "")
+            ));
             memory_content.push_str(&file.content);
         }
 
@@ -132,7 +156,12 @@ impl CursorAdapter {
     }
 
     /// Apply commands: commands/*.md → .cursor/commands/
-    fn apply_commands(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_commands(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -152,7 +181,13 @@ impl CursorAdapter {
     }
 
     /// Apply MCP configs: mcp/*.json → .cursor/mcp.json (mcpServers section)
-    fn apply_mcp(&self, files: &[PresetFile], strategy: &MergeStrategy, result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_mcp(
+        &self,
+        files: &[PresetFile],
+        strategy: &MergeStrategy,
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -177,9 +212,7 @@ impl CursorAdapter {
                 // Merge MCP configurations
                 for file in files {
                     let server_config: serde_json::Value = serde_json::from_str(&file.content)?;
-                    let server_name = file.relative_path
-                        .replace("mcp/", "")
-                        .replace(".json", "");
+                    let server_name = file.relative_path.replace("mcp/", "").replace(".json", "");
                     mcp_config["mcpServers"][server_name] = server_config;
                 }
 
@@ -194,14 +227,13 @@ impl CursorAdapter {
 
                 for file in files {
                     let server_config: serde_json::Value = serde_json::from_str(&file.content)?;
-                    let server_name = file.relative_path
-                        .replace("mcp/", "")
-                        .replace(".json", "");
+                    let server_name = file.relative_path.replace("mcp/", "").replace(".json", "");
                     mcp_config["mcpServers"][server_name] = server_config;
                 }
 
                 let json_str = serde_json::to_string_pretty(&mcp_config)?;
-                *mode = write_with_conflict(&mcp_file, &json_str, *mode, result, ".cursor/mcp.json")?;
+                *mode =
+                    write_with_conflict(&mcp_file, &json_str, *mode, result, ".cursor/mcp.json")?;
             }
         }
 
@@ -209,7 +241,12 @@ impl CursorAdapter {
     }
 
     /// Apply hooks: hooks/*.json → .cursor/hooks.json
-    fn apply_hooks(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_hooks(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -224,7 +261,8 @@ impl CursorAdapter {
 
         for file in files {
             let hook_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let hook_name = file.relative_path
+            let hook_name = file
+                .relative_path
                 .replace("hooks/", "")
                 .replace(".json", "");
 
@@ -241,7 +279,12 @@ impl CursorAdapter {
     }
 
     /// Apply agents: agents/*.md → .cursor/agents/
-    fn apply_agents(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_agents(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -261,7 +304,12 @@ impl CursorAdapter {
     }
 
     /// Apply skills: skills/*.ts → .cursor/skills/
-    fn apply_skills(&self, files: &[PresetFile], result: &mut ApplyResult, mode: &mut ConflictMode) -> Result<()> {
+    fn apply_skills(
+        &self,
+        files: &[PresetFile],
+        result: &mut ApplyResult,
+        mode: &mut ConflictMode,
+    ) -> Result<()> {
         if files.is_empty() {
             return Ok(());
         }
@@ -299,16 +347,14 @@ impl ToolAdapter for CursorAdapter {
 
         // Check if cursor command exists
         #[cfg(target_os = "windows")]
-        let check_cmd = std::process::Command::new("where")
-            .arg("cursor")
-            .output();
+        let check_cmd = std::process::Command::new("where").arg("cursor").output();
 
         #[cfg(not(target_os = "windows"))]
-        let check_cmd = std::process::Command::new("which")
-            .arg("cursor")
-            .output();
+        let check_cmd = std::process::Command::new("which").arg("cursor").output();
 
-        check_cmd.map(|output| output.status.success()).unwrap_or(false)
+        check_cmd
+            .map(|output| output.status.success())
+            .unwrap_or(false)
     }
 
     fn apply(
@@ -323,10 +369,25 @@ impl ToolAdapter for CursorAdapter {
         let mut mode = conflict_mode;
 
         // Apply each section with their merge strategies
-        self.apply_rules(&preset_files.rules, &preset_files.rules_strategy, &mut result, &mut mode)?;
-        self.apply_memory(&preset_files.memory, &preset_files.memory_strategy, &mut result, &mut mode)?;
+        self.apply_rules(
+            &preset_files.rules,
+            &preset_files.rules_strategy,
+            &mut result,
+            &mut mode,
+        )?;
+        self.apply_memory(
+            &preset_files.memory,
+            &preset_files.memory_strategy,
+            &mut result,
+            &mut mode,
+        )?;
         self.apply_commands(&preset_files.commands, &mut result, &mut mode)?;
-        self.apply_mcp(&preset_files.mcp, &preset_files.mcp_strategy, &mut result, &mut mode)?;
+        self.apply_mcp(
+            &preset_files.mcp,
+            &preset_files.mcp_strategy,
+            &mut result,
+            &mut mode,
+        )?;
         self.apply_hooks(&preset_files.hooks, &mut result, &mut mode)?;
         self.apply_agents(&preset_files.agents, &mut result, &mut mode)?;
         self.apply_skills(&preset_files.skills, &mut result, &mut mode)?;
@@ -491,16 +552,16 @@ mod tests {
         let (temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/code-style.md".to_string(),
-                    content: "# Code Style".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/code-style.md".to_string(),
+                content: "# Code Style".to_string(),
+            }],
             ..Default::default()
         };
 
-        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         assert!(!result.created.is_empty() || !result.updated.is_empty());
 
@@ -518,17 +579,17 @@ mod tests {
         fs::write(temp_dir.path().join(".cursorrules"), "# Existing Rules").unwrap();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/new.md".to_string(),
-                    content: "# New Rules".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/new.md".to_string(),
+                content: "# New Rules".to_string(),
+            }],
             rules_strategy: MergeStrategy::Concat,
             ..Default::default()
         };
 
-        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".cursorrules")).unwrap();
         assert!(content.contains("# Existing Rules"));
@@ -543,17 +604,17 @@ mod tests {
         fs::write(temp_dir.path().join(".cursorrules"), "# Old Rules").unwrap();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/new.md".to_string(),
-                    content: "# New Rules Only".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/new.md".to_string(),
+                content: "# New Rules Only".to_string(),
+            }],
             rules_strategy: MergeStrategy::Replace,
             ..Default::default()
         };
 
-        adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         let content = fs::read_to_string(temp_dir.path().join(".cursorrules")).unwrap();
         assert!(!content.contains("# Old Rules"));
@@ -565,16 +626,16 @@ mod tests {
         let (temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            commands: vec![
-                PresetFile {
-                    relative_path: "commands/test.md".to_string(),
-                    content: "# Test Command".to_string(),
-                },
-            ],
+            commands: vec![PresetFile {
+                relative_path: "commands/test.md".to_string(),
+                content: "# Test Command".to_string(),
+            }],
             ..Default::default()
         };
 
-        let result = adapter.apply(&preset_files, temp_dir.path(), ConflictMode::Force).unwrap();
+        let result = adapter
+            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("test.md")));
 
@@ -587,12 +648,10 @@ mod tests {
         let (_temp_dir, adapter) = create_test_adapter();
 
         let preset_files = PresetFiles {
-            rules: vec![
-                PresetFile {
-                    relative_path: "rules/test.md".to_string(),
-                    content: "# Test".to_string(),
-                },
-            ],
+            rules: vec![PresetFile {
+                relative_path: "rules/test.md".to_string(),
+                content: "# Test".to_string(),
+            }],
             ..Default::default()
         };
 

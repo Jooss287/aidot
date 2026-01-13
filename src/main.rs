@@ -5,8 +5,8 @@ mod commands;
 mod config;
 mod error;
 mod git;
-mod repository;
 mod preset;
+mod repository;
 
 use clap::Parser;
 use cli::{CacheCommands, Cli, Commands, RepoCommands};
@@ -63,8 +63,7 @@ fn run() -> Result<()> {
                         return Err(error::AidotError::RepositoryNotFound(format!(
                             "Path is not a directory: {}",
                             canonical.display()
-                        ))
-                        .into());
+                        )));
                     }
 
                     (

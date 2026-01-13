@@ -1,5 +1,5 @@
 use crate::error::{AidotError, Result};
-use git2::{Repository, FetchOptions, RemoteCallbacks};
+use git2::{FetchOptions, RemoteCallbacks, Repository};
 use std::path::Path;
 
 /// Clone a Git repository to the specified path
@@ -10,7 +10,11 @@ pub fn clone_repository(url: &str, target_path: &Path) -> Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.transfer_progress(|stats| {
         if stats.received_objects() == stats.total_objects() {
-            print!("Resolving deltas {}/{}\r", stats.indexed_deltas(), stats.total_deltas());
+            print!(
+                "Resolving deltas {}/{}\r",
+                stats.indexed_deltas(),
+                stats.total_deltas()
+            );
         } else if stats.total_objects() > 0 {
             print!(
                 "Received {}/{} objects ({} bytes)\r",
@@ -34,7 +38,10 @@ pub fn clone_repository(url: &str, target_path: &Path) -> Result<()> {
             println!("\n✓ Repository cloned successfully");
             Ok(())
         }
-        Err(e) => Err(AidotError::Git(format!("Failed to clone repository: {}", e))),
+        Err(e) => Err(AidotError::Git(format!(
+            "Failed to clone repository: {}",
+            e
+        ))),
     }
 }
 
@@ -53,7 +60,11 @@ pub fn pull_repository(repo_path: &Path) -> Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.transfer_progress(|stats| {
         if stats.received_objects() == stats.total_objects() {
-            print!("Resolving deltas {}/{}\r", stats.indexed_deltas(), stats.total_deltas());
+            print!(
+                "Resolving deltas {}/{}\r",
+                stats.indexed_deltas(),
+                stats.total_deltas()
+            );
         } else if stats.total_objects() > 0 {
             print!(
                 "Received {}/{} objects\r",
@@ -73,14 +84,17 @@ pub fn pull_repository(repo_path: &Path) -> Result<()> {
         .map_err(|e| AidotError::Git(format!("Failed to fetch: {}", e)))?;
 
     // Get the fetch head and merge
-    let fetch_head = repo.find_reference("FETCH_HEAD")
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
         .map_err(|e| AidotError::Git(format!("Failed to find FETCH_HEAD: {}", e)))?;
 
-    let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)
+    let fetch_commit = repo
+        .reference_to_annotated_commit(&fetch_head)
         .map_err(|e| AidotError::Git(format!("Failed to get commit: {}", e)))?;
 
     // Perform fast-forward merge
-    let analysis = repo.merge_analysis(&[&fetch_commit])
+    let analysis = repo
+        .merge_analysis(&[&fetch_commit])
         .map_err(|e| AidotError::Git(format!("Failed to analyze merge: {}", e)))?;
 
     if analysis.0.is_up_to_date() {
@@ -88,11 +102,13 @@ pub fn pull_repository(repo_path: &Path) -> Result<()> {
     } else if analysis.0.is_fast_forward() {
         // Fast-forward merge
         let refname = "refs/heads/main"; // or master
-        let mut reference = repo.find_reference(refname)
+        let mut reference = repo
+            .find_reference(refname)
             .or_else(|_| repo.find_reference("refs/heads/master"))
             .map_err(|e| AidotError::Git(format!("Failed to find branch: {}", e)))?;
 
-        reference.set_target(fetch_commit.id(), "Fast-forward")
+        reference
+            .set_target(fetch_commit.id(), "Fast-forward")
             .map_err(|e| AidotError::Git(format!("Failed to set target: {}", e)))?;
 
         repo.set_head(reference.name().unwrap())

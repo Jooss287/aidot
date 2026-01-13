@@ -3,10 +3,12 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(name = "aidot")]
 #[command(version, about = "AI dotfiles - Manage LLM tool configurations")]
-#[command(long_about = "aidot (AI dotfiles) is a CLI tool that manages LLM tool configurations \
+#[command(
+    long_about = "aidot (AI dotfiles) is a CLI tool that manages LLM tool configurations \
 across multiple AI coding assistants. It fetches tool-agnostic configuration presets \
 from Git repositories and automatically converts them to the appropriate format for each \
-detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.).")]
+detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.)."
+)]
 #[command(styles = get_styles())]
 #[command(after_help = "Examples:
   aidot init                    Initialize a new preset repository
@@ -30,33 +32,13 @@ pub struct Cli {
 
 fn get_styles() -> clap::builder::Styles {
     clap::builder::Styles::styled()
-        .usage(
-            clap::builder::styling::AnsiColor::Cyan
-                .on_default()
-                .bold(),
-        )
-        .header(
-            clap::builder::styling::AnsiColor::Cyan
-                .on_default()
-                .bold(),
-        )
+        .usage(clap::builder::styling::AnsiColor::Cyan.on_default().bold())
+        .header(clap::builder::styling::AnsiColor::Cyan.on_default().bold())
         .literal(clap::builder::styling::AnsiColor::Green.on_default())
         .placeholder(clap::builder::styling::AnsiColor::Yellow.on_default())
-        .valid(
-            clap::builder::styling::AnsiColor::Green
-                .on_default()
-                .bold(),
-        )
-        .invalid(
-            clap::builder::styling::AnsiColor::Red
-                .on_default()
-                .bold(),
-        )
-        .error(
-            clap::builder::styling::AnsiColor::Red
-                .on_default()
-                .bold(),
-        )
+        .valid(clap::builder::styling::AnsiColor::Green.on_default().bold())
+        .invalid(clap::builder::styling::AnsiColor::Red.on_default().bold())
+        .error(clap::builder::styling::AnsiColor::Red.on_default().bold())
 }
 
 #[derive(Subcommand, Debug)]
