@@ -74,9 +74,11 @@ pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
         println!("{}", "Checking for updates...".dimmed());
     }
 
-    // Build identifier pattern: aidot-{version}-{target}.{ext}
-    // e.g., aidot-v0.1.0-x86_64-pc-windows-msvc.zip
-    let identifier = format!("aidot-{{{{version}}}}-{}.{}", target, get_archive_ext());
+    // Build identifier pattern: aidot-v{version}-{target}.{ext}
+    // self_update replaces {version} with version WITHOUT 'v' prefix (e.g., "0.1.0")
+    // But our release assets have 'v' prefix (e.g., "aidot-v0.1.0-...")
+    // So we add 'v' before {version} in the pattern
+    let identifier = format!("aidot-v{{{{version}}}}-{}.{}", target, get_archive_ext());
 
     // Find latest release (stable or prerelease based on flag)
     let latest_release = if include_prerelease {
@@ -110,7 +112,11 @@ pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
             .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?
     };
 
-    let latest_version = latest_release.version.trim_start_matches('v');
+    // self_update strips 'v' prefix from version field, but name keeps it
+    // We need the tag with 'v' for API calls
+    let latest_tag = &latest_release.name;
+    // Version for comparison (without 'v')
+    let latest_version = &latest_release.version;
 
     if latest_version == current_version {
         println!(
@@ -152,25 +158,95 @@ pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
     println!();
     println!("{}", "Downloading update...".cyan());
 
-    let status = self_update::backends::github::Update::configure()
-        .repo_owner(REPO_OWNER)
-        .repo_name(REPO_NAME)
-        .bin_name(BIN_NAME)
-        .target(target)
-        .identifier(&identifier)
-        .show_download_progress(true)
-        .current_version(current_version)
-        .target_version_tag(&latest_release.version)
-        .build()
-        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?
-        .update()
+    // Build expected asset name: aidot-v0.1.3-beta-x86_64-pc-windows-msvc.zip
+    let expected_asset_name = format!("aidot-{}-{}.{}", latest_tag, target, get_archive_ext());
+
+    // Find the matching asset in the release
+    let asset = latest_release
+        .assets
+        .iter()
+        .find(|a| a.name == expected_asset_name)
+        .ok_or_else(|| {
+            crate::error::AidotError::UpdateError(format!(
+                "No asset found matching '{}'. Available assets: {:?}",
+                expected_asset_name,
+                latest_release
+                    .assets
+                    .iter()
+                    .map(|a| &a.name)
+                    .collect::<Vec<_>>()
+            ))
+        })?;
+
+    // Download and extract using self_update's helper functions
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("aidot-update")
+        .tempdir()
+        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+
+    let tmp_archive_path = tmp_dir.path().join(&asset.name);
+
+    // Build the browser download URL (direct download link)
+    // Format: https://github.com/{owner}/{repo}/releases/download/{tag}/{asset_name}
+    let download_url = format!(
+        "https://github.com/{}/{}/releases/download/{}/{}",
+        REPO_OWNER, REPO_NAME, latest_tag, asset.name
+    );
+
+    // Download with progress
+    println!("{} {}", "Downloading:".dimmed(), download_url);
+    let response = reqwest::blocking::get(&download_url)
+        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+
+    let bytes = response
+        .bytes()
+        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+
+    std::fs::write(&tmp_archive_path, &bytes)
+        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+
+    // Extract the archive
+    println!("{}", "Extracting...".dimmed());
+    let tmp_extract_dir = tmp_dir.path().join("extracted");
+    std::fs::create_dir_all(&tmp_extract_dir)
+        .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let archive_file = std::fs::File::open(&tmp_archive_path)
+            .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+        let mut archive = zip::ZipArchive::new(archive_file)
+            .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+        archive
+            .extract(&tmp_extract_dir)
+            .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let archive_file = std::fs::File::open(&tmp_archive_path)
+            .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+        let decoder = flate2::read::GzDecoder::new(archive_file);
+        let mut archive = tar::Archive::new(decoder);
+        archive
+            .unpack(&tmp_extract_dir)
+            .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
+    }
+
+    // Replace current binary
+    let new_binary = tmp_extract_dir
+        .join(BIN_NAME)
+        .with_extension(std::env::consts::EXE_EXTENSION);
+
+    println!("{}", "Installing...".dimmed());
+    self_update::self_replace::self_replace(&new_binary)
         .map_err(|e| crate::error::AidotError::UpdateError(e.to_string()))?;
 
     println!();
     println!(
         "{} Updated to version {}",
         "✓".green().bold(),
-        status.version().green().bold()
+        latest_version.green().bold()
     );
 
     Ok(())
