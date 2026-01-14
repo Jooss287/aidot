@@ -41,14 +41,20 @@ fn run() -> Result<()> {
                 default,
                 description,
             } => {
-                // Check if git is available for remote repositories
-                if !local {
-                    git::check_git_available()?;
+                // Helper function to check if input looks like a URL
+                fn is_url(input: &str) -> bool {
+                    input.starts_with("http://")
+                        || input.starts_with("https://")
+                        || input.starts_with("git@")
+                        || input.starts_with("ssh://")
+                        || input.starts_with("git://")
                 }
 
-                let (resolved_url, source_type) = if local {
-                    // Convert to absolute path
-                    let path = std::path::PathBuf::from(&url);
+                // Helper function to process local path
+                fn process_local_path(
+                    url: &str,
+                ) -> Result<(String, config::SourceType)> {
+                    let path = std::path::PathBuf::from(url);
                     let absolute_path = if path.is_absolute() {
                         path
                     } else {
@@ -71,13 +77,64 @@ fn run() -> Result<()> {
                         )));
                     }
 
-                    (
+                    // Verify .aidot-config.toml exists
+                    let config_file = canonical.join(".aidot-config.toml");
+                    if !config_file.exists() {
+                        return Err(error::AidotError::InvalidPreset(format!(
+                            "Not a valid preset directory (missing .aidot-config.toml): {}",
+                            canonical.display()
+                        )));
+                    }
+
+                    Ok((
                         canonical.to_string_lossy().to_string(),
                         config::SourceType::Local,
-                    )
+                    ))
+                }
+
+                // Determine source type: explicit --local flag, URL pattern, or auto-detect local path
+                let (resolved_url, source_type, is_local) = if local {
+                    // Explicit --local flag: treat as local path
+                    let (resolved, source) = process_local_path(&url)?;
+                    (resolved, source, true)
+                } else if is_url(&url) {
+                    // URL pattern detected: treat as Git repository
+                    git::check_git_available()?;
+                    (url.clone(), config::SourceType::Git, false)
                 } else {
-                    (url.clone(), config::SourceType::Git)
+                    // Not a URL pattern: check if it's an existing local path
+                    let path = std::path::PathBuf::from(&url);
+                    let absolute_path = if path.is_absolute() {
+                        path
+                    } else {
+                        std::env::current_dir()?.join(&path)
+                    };
+
+                    if absolute_path.exists() {
+                        // Path exists: auto-detect as local preset
+                        let (resolved, source) = process_local_path(&url)?;
+                        println!(
+                            "{} Auto-detected as local path. Use --local flag to make this explicit.",
+                            "Note:".yellow()
+                        );
+                        (resolved, source, true)
+                    } else {
+                        // Path doesn't exist and not a URL pattern: show helpful error
+                        return Err(error::AidotError::InvalidInput(format!(
+                            "'{}' is neither a valid URL (http://, https://, git@, ssh://, git://) \
+                            nor an existing local path.\n\
+                            \n\
+                            For remote repositories, use a valid Git URL:\n\
+                            \x20 aidot repo add {} https://github.com/user/repo.git\n\
+                            \n\
+                            For local presets, use --local flag with an existing directory:\n\
+                            \x20 aidot repo add {} /path/to/preset --local",
+                            url, name, name
+                        )));
+                    }
                 };
+
+                let local = is_local;
 
                 let type_label = if local {
                     "local preset".yellow()

@@ -22,7 +22,15 @@ pub fn ensure_cached(repo_name: &str, repo_url: &str) -> Result<PathBuf> {
         if cache_path.exists() {
             std::fs::remove_dir_all(&cache_path)?;
         }
-        git::clone_repository(repo_url, &cache_path)?;
+
+        // Attempt to clone, clean up on failure
+        if let Err(e) = git::clone_repository(repo_url, &cache_path) {
+            // Clean up any partially created directory
+            if cache_path.exists() {
+                let _ = std::fs::remove_dir_all(&cache_path);
+            }
+            return Err(e);
+        }
     }
 
     Ok(cache_path)

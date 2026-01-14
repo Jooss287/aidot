@@ -26,6 +26,9 @@ pub enum AidotError {
     #[error("Invalid preset structure: {0}")]
     InvalidPreset(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Tool not detected: {0}")]
     ToolNotDetected(String),
 
