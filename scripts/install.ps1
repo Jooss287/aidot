@@ -27,6 +27,19 @@ function Write-Error {
     exit 1
 }
 
+function Check-GitInstalled {
+    try {
+        $null = & git --version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+    }
+    catch {
+        # Git not found
+    }
+    return $false
+}
+
 function Get-LatestVersion {
     param([switch]$Prerelease)
 
@@ -46,6 +59,14 @@ function Get-LatestVersion {
 
 function Install-Aidot {
     param([switch]$Prerelease)
+
+    # Check if git is installed (required for remote repository features)
+    if (-not (Check-GitInstalled)) {
+        Write-Warn "Git is not installed. Some features (repo add, pull from remote) will not work."
+        Write-Host ""
+        Write-Host "To install Git for Windows, visit: https://git-scm.com/download/win" -ForegroundColor Cyan
+        Write-Host ""
+    }
 
     $platform = "x86_64-pc-windows-msvc"
     $version = Get-LatestVersion -Prerelease:$Prerelease

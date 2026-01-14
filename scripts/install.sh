@@ -28,6 +28,15 @@ error() {
     exit 1
 }
 
+# Check if git is installed
+check_git() {
+    if command -v git &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Detect OS and architecture
 detect_platform() {
     local os arch
@@ -84,6 +93,17 @@ get_latest_version() {
 install() {
     local platform version download_url temp_dir archive_name
     local prerelease="${1:-false}"
+
+    # Check if git is installed (required for remote repository features)
+    if ! check_git; then
+        warn "Git is not installed. Some features (repo add, pull from remote) will not work."
+        echo ""
+        echo "To install git:"
+        echo "  - macOS: brew install git"
+        echo "  - Ubuntu/Debian: sudo apt install git"
+        echo "  - Fedora: sudo dnf install git"
+        echo ""
+    fi
 
     platform=$(detect_platform)
     version=$(get_latest_version "$prerelease")

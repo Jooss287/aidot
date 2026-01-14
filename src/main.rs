@@ -41,6 +41,11 @@ fn run() -> Result<()> {
                 default,
                 description,
             } => {
+                // Check if git is available for remote repositories
+                if !local {
+                    git::check_git_available()?;
+                }
+
                 let (resolved_url, source_type) = if local {
                     // Convert to absolute path
                     let path = std::path::PathBuf::from(&url);

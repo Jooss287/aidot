@@ -1,129 +1,102 @@
 use crate::error::{AidotError, Result};
-use git2::{FetchOptions, RemoteCallbacks, Repository};
+use git2::Repository;
 use std::path::Path;
+use std::process::Command;
+use std::sync::OnceLock;
+
+/// Cache for git availability check
+static GIT_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
+/// Check if git CLI is available on the system
+pub fn check_git_available() -> Result<()> {
+    let is_available = GIT_AVAILABLE.get_or_init(|| {
+        Command::new("git")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    });
+
+    if *is_available {
+        Ok(())
+    } else {
+        Err(AidotError::Git(
+            "Git is not installed or not found in PATH. Please install git to use remote repositories.\n\
+             - Windows: https://git-scm.com/download/win\n\
+             - macOS: brew install git\n\
+             - Linux: apt install git / dnf install git".to_string()
+        ))
+    }
+}
+
+/// Clone a Git repository using system git CLI
+/// This provides better compatibility with SSH agents, credential helpers, and various auth methods
+fn clone_with_git_cli(url: &str, target_path: &Path) -> Result<()> {
+    let output = Command::new("git")
+        .args(["clone", "--progress", url])
+        .arg(target_path)
+        .output()
+        .map_err(|e| {
+            AidotError::Git(format!(
+                "Failed to execute git command. Is git installed? Error: {}",
+                e
+            ))
+        })?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(AidotError::Git(format!("Failed to clone repository: {}", stderr)))
+    }
+}
+
+/// Pull latest changes using system git CLI
+fn pull_with_git_cli(repo_path: &Path) -> Result<()> {
+    let output = Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| {
+            AidotError::Git(format!(
+                "Failed to execute git command. Is git installed? Error: {}",
+                e
+            ))
+        })?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.contains("Already up to date") || stdout.contains("Already up-to-date") {
+            println!("Already up-to-date");
+        } else {
+            println!("{}", stdout);
+        }
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(AidotError::Git(format!("Failed to pull: {}", stderr)))
+    }
+}
 
 /// Clone a Git repository to the specified path
 pub fn clone_repository(url: &str, target_path: &Path) -> Result<()> {
+    check_git_available()?;
     println!("Cloning repository from {}...", url);
 
-    // Setup callbacks for progress
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(|stats| {
-        if stats.received_objects() == stats.total_objects() {
-            print!(
-                "Resolving deltas {}/{}\r",
-                stats.indexed_deltas(),
-                stats.total_deltas()
-            );
-        } else if stats.total_objects() > 0 {
-            print!(
-                "Received {}/{} objects ({} bytes)\r",
-                stats.received_objects(),
-                stats.total_objects(),
-                stats.received_bytes()
-            );
-        }
-        std::io::Write::flush(&mut std::io::stdout()).ok();
-        true
-    });
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-
-    let mut builder = git2::build::RepoBuilder::new();
-    builder.fetch_options(fetch_options);
-
-    match builder.clone(url, target_path) {
-        Ok(_) => {
-            println!("\n✓ Repository cloned successfully");
-            Ok(())
-        }
-        Err(e) => Err(AidotError::Git(format!(
-            "Failed to clone repository: {}",
-            e
-        ))),
-    }
+    // Use system git CLI for better SSH/auth compatibility
+    clone_with_git_cli(url, target_path)?;
+    println!("Repository cloned successfully");
+    Ok(())
 }
 
 /// Pull latest changes from a Git repository
 pub fn pull_repository(repo_path: &Path) -> Result<()> {
+    check_git_available()?;
     println!("Updating repository at {}...", repo_path.display());
 
-    let repo = Repository::open(repo_path)
-        .map_err(|e| AidotError::Git(format!("Failed to open repository: {}", e)))?;
-
-    // Fetch from origin
-    let mut remote = repo
-        .find_remote("origin")
-        .map_err(|e| AidotError::Git(format!("Failed to find remote 'origin': {}", e)))?;
-
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(|stats| {
-        if stats.received_objects() == stats.total_objects() {
-            print!(
-                "Resolving deltas {}/{}\r",
-                stats.indexed_deltas(),
-                stats.total_deltas()
-            );
-        } else if stats.total_objects() > 0 {
-            print!(
-                "Received {}/{} objects\r",
-                stats.received_objects(),
-                stats.total_objects()
-            );
-        }
-        std::io::Write::flush(&mut std::io::stdout()).ok();
-        true
-    });
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-
-    remote
-        .fetch(&["main", "master"], Some(&mut fetch_options), None)
-        .map_err(|e| AidotError::Git(format!("Failed to fetch: {}", e)))?;
-
-    // Get the fetch head and merge
-    let fetch_head = repo
-        .find_reference("FETCH_HEAD")
-        .map_err(|e| AidotError::Git(format!("Failed to find FETCH_HEAD: {}", e)))?;
-
-    let fetch_commit = repo
-        .reference_to_annotated_commit(&fetch_head)
-        .map_err(|e| AidotError::Git(format!("Failed to get commit: {}", e)))?;
-
-    // Perform fast-forward merge
-    let analysis = repo
-        .merge_analysis(&[&fetch_commit])
-        .map_err(|e| AidotError::Git(format!("Failed to analyze merge: {}", e)))?;
-
-    if analysis.0.is_up_to_date() {
-        println!("Already up-to-date");
-    } else if analysis.0.is_fast_forward() {
-        // Fast-forward merge
-        let refname = "refs/heads/main"; // or master
-        let mut reference = repo
-            .find_reference(refname)
-            .or_else(|_| repo.find_reference("refs/heads/master"))
-            .map_err(|e| AidotError::Git(format!("Failed to find branch: {}", e)))?;
-
-        reference
-            .set_target(fetch_commit.id(), "Fast-forward")
-            .map_err(|e| AidotError::Git(format!("Failed to set target: {}", e)))?;
-
-        repo.set_head(reference.name().unwrap())
-            .map_err(|e| AidotError::Git(format!("Failed to set HEAD: {}", e)))?;
-
-        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
-            .map_err(|e| AidotError::Git(format!("Failed to checkout: {}", e)))?;
-
-        println!("\n✓ Repository updated successfully");
-    } else {
-        return Err(AidotError::Git(
-            "Cannot fast-forward, manual merge required".to_string(),
-        ));
-    }
-
+    // Use system git CLI for better SSH/auth compatibility
+    pull_with_git_cli(repo_path)?;
+    println!("Repository updated successfully");
     Ok(())
 }
 
