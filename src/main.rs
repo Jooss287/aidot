@@ -51,9 +51,7 @@ fn run() -> Result<()> {
                 }
 
                 // Helper function to process local path
-                fn process_local_path(
-                    url: &str,
-                ) -> Result<(String, config::SourceType)> {
+                fn process_local_path(url: &str) -> Result<(String, config::SourceType)> {
                     let path = std::path::PathBuf::from(url);
                     let absolute_path = if path.is_absolute() {
                         path

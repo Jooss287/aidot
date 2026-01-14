@@ -47,7 +47,10 @@ fn clone_with_git_cli(url: &str, target_path: &Path) -> Result<()> {
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(AidotError::Git(format!("Failed to clone repository: {}", stderr)))
+        Err(AidotError::Git(format!(
+            "Failed to clone repository: {}",
+            stderr
+        )))
     }
 }
 
