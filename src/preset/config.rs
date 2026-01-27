@@ -31,6 +31,9 @@ pub struct PresetConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<DirectorySection>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<DirectorySection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

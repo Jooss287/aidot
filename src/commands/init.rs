@@ -72,7 +72,7 @@ fn init_empty_preset(path: &Path) -> Result<()> {
 
     // Create directory structure
     let directories = vec![
-        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings",
+        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings", "root",
     ];
 
     for dir in &directories {
@@ -181,7 +181,7 @@ fn init_from_existing(path: &Path) -> Result<()> {
 
     // Create directory structure
     let directories = vec![
-        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings",
+        "rules", "memory", "commands", "mcp", "hooks", "agents", "skills", "settings", "root",
     ];
 
     for dir in &directories {
@@ -780,6 +780,12 @@ directory = "skills/"
 # Settings: Tool-specific settings
 [settings]
 directory = "settings/"
+
+# Root: Files to deploy directly to project root
+# Use for editor/linter configs like .editorconfig, .prettierrc, etc.
+# Note: Cannot contain .claude/, .cursor/, .github/, .vscode/ folders
+[root]
+directory = "root/"
 "#,
         preset_name
     )
@@ -802,6 +808,7 @@ This repository contains LLM tool configurations managed by [aidot](https://gith
 - `agents/` - AI agent definitions
 - `skills/` - Reusable agent utilities
 - `settings/` - Tool-specific settings
+- `root/` - Files deployed directly to project root (editor/linter configs)
 
 ## Example Files
 
@@ -845,6 +852,17 @@ Add reusable agent utilities (TypeScript/JavaScript):
 ### settings/
 Add tool-specific settings (JSON format):
 - `settings/preferences.json` - General preferences
+
+### root/
+Add files to deploy directly to project root:
+- `root/.editorconfig` - Editor configuration
+- `root/.prettierrc` - Prettier configuration
+- `root/.eslintrc` - ESLint configuration
+- `root/.clang-format` - C/C++ formatting
+- `root/pyproject.toml` - Python project config
+
+**Note:** Cannot contain `.claude/`, `.cursor/`, `.github/`, `.vscode/` folders.
+Use dedicated sections (rules/, memory/, etc.) for LLM tool configurations.
 
 ## Usage
 

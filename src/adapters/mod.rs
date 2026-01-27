@@ -5,4 +5,4 @@ pub mod detector;
 pub mod traits;
 
 pub use detector::detect_tools;
-pub use traits::{ConflictMode, ToolAdapter};
+pub use traits::{write_with_conflict, ConflictMode, ToolAdapter};

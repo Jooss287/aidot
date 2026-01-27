@@ -1,10 +1,11 @@
-use crate::adapters::traits::PendingChange;
-use crate::adapters::{detect_tools, ConflictMode};
+use crate::adapters::traits::{ApplyResult, PendingChange};
+use crate::adapters::{detect_tools, write_with_conflict, ConflictMode};
 use crate::error::Result;
 use crate::preset::parse_preset;
 use crate::repository;
 use colored::Colorize;
 use std::io::{self, Write};
+use std::path::Path;
 
 /// Pull and apply preset configurations
 pub fn pull_preset(
@@ -81,6 +82,21 @@ pub fn pull_preset(
 
     let mut all_changes: Vec<(String, PendingChange)> = Vec::new();
 
+    // Scan root files first (tool-agnostic)
+    for root_file in &preset_files.root {
+        let target_path = target_dir.join(&root_file.relative_path);
+        let is_conflict = target_path.exists();
+        all_changes.push((
+            "Root".to_string(),
+            PendingChange {
+                path: root_file.relative_path.clone(),
+                section: "root".to_string(),
+                is_conflict,
+            },
+        ));
+    }
+
+    // Scan tool-specific files
     for tool in &tools {
         let scan_result = tool.scan(&preset_files, &target_dir);
         for change in scan_result.changes {
@@ -155,42 +171,72 @@ pub fn pull_preset(
     // Phase 5: Apply changes
     println!("{}", "Applying...".cyan());
 
+    // Apply root files first (tool-agnostic)
+    if !preset_files.root.is_empty() {
+        let root_result = apply_root_files(&preset_files.root, &target_dir, conflict_mode)?;
+        print_apply_result("Root", &root_result);
+    }
+
+    // Apply tool-specific files
     for tool in tools {
         let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
-
-        let has_changes =
-            !result.created.is_empty() || !result.updated.is_empty() || !result.skipped.is_empty();
-
-        if has_changes {
-            println!("\n{} {}", "Applied to".cyan(), tool.name().white().bold());
-
-            if !result.created.is_empty() {
-                println!("  {}:", "Created".green());
-                for file in &result.created {
-                    println!("    {} {}", "+".green(), file.white());
-                }
-            }
-
-            if !result.updated.is_empty() {
-                println!("  {}:", "Updated".yellow());
-                for file in &result.updated {
-                    println!("    {} {}", "~".yellow(), file.white());
-                }
-            }
-
-            if !result.skipped.is_empty() {
-                println!("  {}:", "Skipped".dimmed());
-                for file in &result.skipped {
-                    println!("    {} {}", "-".dimmed(), file.dimmed());
-                }
-            }
-        }
+        print_apply_result(tool.name(), &result);
     }
 
     println!();
     println!("{}", "Preset applied successfully!".green().bold());
 
     Ok(())
+}
+
+/// Print apply result for a tool or root
+fn print_apply_result(name: &str, result: &ApplyResult) {
+    let has_changes =
+        !result.created.is_empty() || !result.updated.is_empty() || !result.skipped.is_empty();
+
+    if has_changes {
+        println!("\n{} {}", "Applied to".cyan(), name.white().bold());
+
+        if !result.created.is_empty() {
+            println!("  {}:", "Created".green());
+            for file in &result.created {
+                println!("    {} {}", "+".green(), file.white());
+            }
+        }
+
+        if !result.updated.is_empty() {
+            println!("  {}:", "Updated".yellow());
+            for file in &result.updated {
+                println!("    {} {}", "~".yellow(), file.white());
+            }
+        }
+
+        if !result.skipped.is_empty() {
+            println!("  {}:", "Skipped".dimmed());
+            for file in &result.skipped {
+                println!("    {} {}", "-".dimmed(), file.dimmed());
+            }
+        }
+    }
+}
+
+/// Apply root files directly to target directory
+fn apply_root_files(
+    root_files: &[crate::adapters::traits::PresetFile],
+    target_dir: &Path,
+    conflict_mode: ConflictMode,
+) -> Result<ApplyResult> {
+    let mut result = ApplyResult::new();
+    let mut current_mode = conflict_mode;
+
+    for file in root_files {
+        let target_path = target_dir.join(&file.relative_path);
+
+        current_mode =
+            write_with_conflict(&target_path, &file.content, current_mode, &mut result, &file.relative_path)?;
+    }
+
+    Ok(result)
 }
 
 /// Ask user how to handle conflicts

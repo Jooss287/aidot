@@ -161,6 +161,7 @@ pub struct PresetFiles {
     pub agents: Vec<PresetFile>,
     pub skills: Vec<PresetFile>,
     pub settings: Vec<PresetFile>,
+    pub root: Vec<PresetFile>,
 }
 
 /// A pending change detected during scan
@@ -273,6 +274,7 @@ mod tests {
         assert!(files.agents.is_empty());
         assert!(files.skills.is_empty());
         assert!(files.settings.is_empty());
+        assert!(files.root.is_empty());
     }
 
     #[test]
