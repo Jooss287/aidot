@@ -3,16 +3,12 @@ use thiserror::Error;
 
 /// Main error type for aidot
 #[derive(Error, Debug)]
-#[allow(dead_code)]
 pub enum AidotError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
     #[error("Configuration parse error: {0}")]
     ConfigParse(String),
-
-    #[error("Preset parse error: {0}")]
-    PresetParse(String),
 
     #[error("Git error: {0}")]
     Git(String),
@@ -28,15 +24,6 @@ pub enum AidotError {
 
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-
-    #[error("Tool not detected: {0}")]
-    ToolNotDetected(String),
-
-    #[error("Merge conflict: {0}")]
-    MergeConflict(String),
-
-    #[error("Invalid path: {0}")]
-    InvalidPath(PathBuf),
 
     #[error("TOML serialization error: {0}")]
     TomlSerialize(#[from] toml::ser::Error),

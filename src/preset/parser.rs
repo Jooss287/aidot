@@ -14,51 +14,43 @@ pub fn parse_preset(preset_dir: &Path) -> Result<(PresetConfig, PresetFiles)> {
     let mut preset_files = PresetFiles::default();
 
     // Parse rules
-    if let Some(ref rules_section) = config.rules {
+    if config.rules.is_some() {
         preset_files.rules = parse_directory(preset_dir, "rules")?;
-        preset_files.rules_strategy = rules_section.merge_strategy.clone();
     }
 
     // Parse memory
-    if let Some(ref memory_section) = config.memory {
+    if config.memory.is_some() {
         preset_files.memory = parse_directory(preset_dir, "memory")?;
-        preset_files.memory_strategy = memory_section.merge_strategy.clone();
     }
 
     // Parse commands
-    if let Some(ref commands_section) = config.commands {
+    if config.commands.is_some() {
         preset_files.commands = parse_directory(preset_dir, "commands")?;
-        preset_files.commands_strategy = commands_section.merge_strategy.clone();
     }
 
     // Parse MCP
-    if let Some(ref mcp_section) = config.mcp {
+    if config.mcp.is_some() {
         preset_files.mcp = parse_directory(preset_dir, "mcp")?;
-        preset_files.mcp_strategy = mcp_section.merge_strategy.clone();
     }
 
     // Parse hooks
-    if let Some(ref hooks_section) = config.hooks {
+    if config.hooks.is_some() {
         preset_files.hooks = parse_directory(preset_dir, "hooks")?;
-        preset_files.hooks_strategy = hooks_section.merge_strategy.clone();
     }
 
     // Parse agents
-    if let Some(ref agents_section) = config.agents {
+    if config.agents.is_some() {
         preset_files.agents = parse_directory(preset_dir, "agents")?;
-        preset_files.agents_strategy = agents_section.merge_strategy.clone();
     }
 
     // Parse skills
-    if let Some(ref skills_section) = config.skills {
+    if config.skills.is_some() {
         preset_files.skills = parse_directory(preset_dir, "skills")?;
-        preset_files.skills_strategy = skills_section.merge_strategy.clone();
     }
 
     // Parse settings
-    if let Some(ref settings_section) = config.settings {
+    if config.settings.is_some() {
         preset_files.settings = parse_directory(preset_dir, "settings")?;
-        preset_files.settings_strategy = settings_section.merge_strategy.clone();
     }
 
     Ok((config, preset_files))

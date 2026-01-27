@@ -186,11 +186,9 @@ description = "팀 공용 LLM 설정"
 
 [rules]
 files = ["rules/*.md"]
-merge_strategy = "concat"  # concat: 연결, replace: 대체
 
 [memory]
 directory = "memory/"
-merge_strategy = "concat"
 
 [commands]
 directory = "commands/"

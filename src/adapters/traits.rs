@@ -1,5 +1,4 @@
 use crate::error::Result;
-use crate::preset::config::MergeStrategy;
 use std::path::Path;
 
 /// Represents a preset file to be converted
@@ -129,6 +128,10 @@ pub trait ToolAdapter {
     /// Detect if this tool is available/installed
     fn detect(&self) -> bool;
 
+    /// Scan for changes without applying them
+    /// Returns a list of pending changes with conflict information
+    fn scan(&self, preset_files: &PresetFiles, target_dir: &Path) -> ScanResult;
+
     /// Apply preset files to the target project directory
     ///
     /// # Arguments
@@ -145,17 +148,9 @@ pub trait ToolAdapter {
         target_dir: &Path,
         conflict_mode: ConflictMode,
     ) -> Result<ApplyResult>;
-
-    /// Preview what changes would be made (for dry-run mode)
-    fn preview(
-        &self,
-        preset_files: &PresetFiles,
-        target_dir: &Path,
-        conflict_mode: ConflictMode,
-    ) -> PreviewResult;
 }
 
-/// Preset files organized by section with merge strategies
+/// Preset files organized by section
 #[derive(Debug, Default)]
 pub struct PresetFiles {
     pub rules: Vec<PresetFile>,
@@ -166,16 +161,58 @@ pub struct PresetFiles {
     pub agents: Vec<PresetFile>,
     pub skills: Vec<PresetFile>,
     pub settings: Vec<PresetFile>,
+}
 
-    // Merge strategies for each section
-    pub rules_strategy: MergeStrategy,
-    pub memory_strategy: MergeStrategy,
-    pub commands_strategy: MergeStrategy,
-    pub mcp_strategy: MergeStrategy,
-    pub hooks_strategy: MergeStrategy,
-    pub agents_strategy: MergeStrategy,
-    pub skills_strategy: MergeStrategy,
-    pub settings_strategy: MergeStrategy,
+/// A pending change detected during scan
+#[derive(Debug, Clone)]
+pub struct PendingChange {
+    /// Display path (e.g., ".claude/CLAUDE.md")
+    pub path: String,
+    /// Section name (e.g., "rules", "memory")
+    pub section: String,
+    /// Whether this is a conflict (file already exists)
+    pub is_conflict: bool,
+}
+
+/// Result of scanning for changes
+#[derive(Debug, Default)]
+pub struct ScanResult {
+    pub changes: Vec<PendingChange>,
+}
+
+impl ScanResult {
+    pub fn new() -> Self {
+        Self {
+            changes: Vec::new(),
+        }
+    }
+
+    pub fn add_change(&mut self, path: String, section: String, is_conflict: bool) {
+        self.changes.push(PendingChange {
+            path,
+            section,
+            is_conflict,
+        });
+    }
+}
+
+#[cfg(test)]
+impl ScanResult {
+    pub fn conflicts(&self) -> Vec<&PendingChange> {
+        self.changes.iter().filter(|c| c.is_conflict).collect()
+    }
+
+    pub fn creates(&self) -> Vec<&PendingChange> {
+        self.changes.iter().filter(|c| !c.is_conflict).collect()
+    }
+
+    pub fn has_conflicts(&self) -> bool {
+        self.changes.iter().any(|c| c.is_conflict)
+    }
+
+    pub fn has_changes(&self) -> bool {
+        !self.changes.is_empty()
+    }
 }
 
 /// Result of applying a preset
@@ -211,49 +248,6 @@ impl ApplyResult {
     }
 }
 
-/// Preview result for dry-run mode
-#[derive(Debug)]
-pub struct PreviewResult {
-    /// Files that would be created
-    pub would_create: Vec<PreviewFile>,
-    /// Files that would be updated
-    pub would_update: Vec<PreviewFile>,
-    /// Files that would be skipped
-    pub would_skip: Vec<String>,
-}
-
-#[derive(Debug)]
-pub struct PreviewFile {
-    pub path: String,
-    pub section: String,
-}
-
-impl PreviewResult {
-    pub fn new() -> Self {
-        Self {
-            would_create: Vec::new(),
-            would_update: Vec::new(),
-            would_skip: Vec::new(),
-        }
-    }
-
-    pub fn add_would_create(&mut self, path: String, section: String) {
-        self.would_create.push(PreviewFile { path, section });
-    }
-
-    pub fn add_would_update(&mut self, path: String, section: String) {
-        self.would_update.push(PreviewFile { path, section });
-    }
-
-    pub fn add_would_skip(&mut self, path: String) {
-        self.would_skip.push(path);
-    }
-
-    pub fn has_changes(&self) -> bool {
-        !self.would_create.is_empty() || !self.would_update.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,7 +273,6 @@ mod tests {
         assert!(files.agents.is_empty());
         assert!(files.skills.is_empty());
         assert!(files.settings.is_empty());
-        assert_eq!(files.rules_strategy, MergeStrategy::Concat);
     }
 
     #[test]
@@ -300,21 +293,21 @@ mod tests {
     }
 
     #[test]
-    fn test_preview_result() {
-        let mut result = PreviewResult::new();
+    fn test_scan_result() {
+        let mut result = ScanResult::new();
         assert!(!result.has_changes());
+        assert!(!result.has_conflicts());
 
-        result.add_would_create("file1.md".to_string(), "rules".to_string());
+        result.add_change("file1.md".to_string(), "rules".to_string(), false);
         assert!(result.has_changes());
-        assert_eq!(result.would_create.len(), 1);
-        assert_eq!(result.would_create[0].path, "file1.md");
-        assert_eq!(result.would_create[0].section, "rules");
+        assert!(!result.has_conflicts());
+        assert_eq!(result.creates().len(), 1);
+        assert_eq!(result.conflicts().len(), 0);
 
-        result.add_would_update("file2.md".to_string(), "memory".to_string());
-        assert_eq!(result.would_update.len(), 1);
-
-        result.add_would_skip("file3.md".to_string());
-        assert_eq!(result.would_skip.len(), 1);
+        result.add_change("file2.md".to_string(), "memory".to_string(), true);
+        assert!(result.has_conflicts());
+        assert_eq!(result.creates().len(), 1);
+        assert_eq!(result.conflicts().len(), 1);
     }
 
     #[test]

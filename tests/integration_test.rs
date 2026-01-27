@@ -29,15 +29,12 @@ description = "Test preset"
 
 [rules]
 files = ["rules/test.md"]
-merge_strategy = "concat"
 
 [memory]
 directory = "memory/"
-merge_strategy = "concat"
 
 [commands]
 directory = "commands/"
-merge_strategy = "replace"
 "#;
     fs::write(dir.join(".aidot-config.toml"), config).unwrap();
 

@@ -1,5 +1,4 @@
 use crate::error::{AidotError, Result};
-use crate::preset::PresetConfig;
 use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -84,13 +83,13 @@ fn init_empty_preset(path: &Path) -> Result<()> {
         }
     }
 
-    // Create .aidot-config.toml
+    // Create .aidot-config.toml with comments
     let preset_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("llm-preset");
-    let config = PresetConfig::default_preset(preset_name);
-    config.save(path)?;
+    let config_content = create_config_template(preset_name);
+    fs::write(path.join(".aidot-config.toml"), config_content)?;
     println!(
         "  {} {} {}",
         "✓".green(),
@@ -204,13 +203,13 @@ fn init_from_existing(path: &Path) -> Result<()> {
     written_count += write_extracted_files(path, "skills", &extracted.skills)?;
     written_count += write_extracted_files(path, "settings", &extracted.settings)?;
 
-    // Create .aidot-config.toml
+    // Create .aidot-config.toml with comments
     let preset_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("llm-preset");
-    let config = PresetConfig::default_preset(preset_name);
-    config.save(path)?;
+    let config_content = create_config_template(preset_name);
+    fs::write(path.join(".aidot-config.toml"), config_content)?;
     println!(
         "  {} {} {}",
         "✓".green(),
@@ -738,6 +737,52 @@ fn extract_copilot(source_path: &Path, extracted: &mut ExtractedFiles) -> Result
     } else {
         Ok(None)
     }
+}
+
+/// Create .aidot-config.toml template with comments
+fn create_config_template(preset_name: &str) -> String {
+    format!(
+        r#"[metadata]
+name = "{}"
+version = "1.0.0"
+description = "LLM configuration preset"
+
+# Rules: LLM behavioral rules and coding guidelines
+# You can specify individual files or use a directory
+[rules]
+directory = "rules/"
+# files = ["rules/code-style.md", "rules/testing.md"]
+
+# Memory: Project context and documentation
+[memory]
+directory = "memory/"
+
+# Commands: Custom slash commands
+[commands]
+directory = "commands/"
+
+# MCP: Model Context Protocol server configurations
+[mcp]
+directory = "mcp/"
+
+# Hooks: Event-based automation hooks
+[hooks]
+directory = "hooks/"
+
+# Agents: AI agent definitions
+[agents]
+directory = "agents/"
+
+# Skills: Reusable agent utilities
+[skills]
+directory = "skills/"
+
+# Settings: Tool-specific settings
+[settings]
+directory = "settings/"
+"#,
+        preset_name
+    )
 }
 
 /// Create README.md for the preset repository

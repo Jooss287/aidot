@@ -1,8 +1,10 @@
+use crate::adapters::traits::PendingChange;
 use crate::adapters::{detect_tools, ConflictMode};
 use crate::error::Result;
 use crate::preset::parse_preset;
 use crate::repository;
 use colored::Colorize;
+use std::io::{self, Write};
 
 /// Pull and apply preset configurations
 pub fn pull_preset(
@@ -12,14 +14,6 @@ pub fn pull_preset(
     force: bool,
     skip: bool,
 ) -> Result<()> {
-    // Determine conflict mode
-    let conflict_mode = if force {
-        ConflictMode::Force
-    } else if skip {
-        ConflictMode::Skip
-    } else {
-        ConflictMode::Ask
-    };
     // Resolve repository source (local path, Git URL, or registered repo name)
     let preset_path = repository::resolve_repository_source(&preset_source)?;
 
@@ -78,95 +72,156 @@ pub fn pull_preset(
         "tool(s):".green()
     );
     for tool in &tools {
-        println!("  {} {}", "•".cyan(), tool.name().white());
+        println!("  {} {}", "-".cyan(), tool.name().white());
     }
     println!();
 
-    if dry_run {
-        println!("{}", "═══ DRY RUN MODE ═══".yellow().bold());
-        println!(
-            "{}\n",
-            "No files will be modified. Showing what would happen:".yellow()
-        );
+    // Phase 1: Scan all tools for changes
+    println!("{}", "Scanning...".cyan());
 
-        for tool in &tools {
-            println!("{} {}", "Preview for:".cyan(), tool.name().white().bold());
+    let mut all_changes: Vec<(String, PendingChange)> = Vec::new();
 
-            let preview = tool.preview(&preset_files, &target_dir, conflict_mode);
-
-            if !preview.has_changes() {
-                println!("  {} No changes would be made", "ℹ".blue());
-            } else {
-                if !preview.would_create.is_empty() {
-                    println!("  {} Would create:", "CREATE".green().bold());
-                    for file in &preview.would_create {
-                        println!(
-                            "    {} {} {}",
-                            "+".green(),
-                            file.path.white(),
-                            format!("({})", file.section).dimmed()
-                        );
-                    }
-                }
-
-                if !preview.would_update.is_empty() {
-                    println!("  {} Would update:", "UPDATE".yellow().bold());
-                    for file in &preview.would_update {
-                        println!(
-                            "    {} {} {}",
-                            "~".yellow(),
-                            file.path.white(),
-                            format!("({})", file.section).dimmed()
-                        );
-                    }
-                }
-
-                if !preview.would_skip.is_empty() {
-                    println!("  {} Would skip:", "SKIP".dimmed());
-                    for path in &preview.would_skip {
-                        println!("    {} {}", "-".dimmed(), path.dimmed());
-                    }
-                }
-            }
-            println!();
+    for tool in &tools {
+        let scan_result = tool.scan(&preset_files, &target_dir);
+        for change in scan_result.changes {
+            all_changes.push((tool.name().to_string(), change));
         }
+    }
 
-        println!("{}", "Run without --dry-run to apply these changes.".cyan());
+    if all_changes.is_empty() {
+        println!("{}", "No changes to apply.".yellow());
         return Ok(());
     }
 
-    // Apply to each detected tool
-    for tool in tools {
-        println!("{} {}", "Applying to".cyan(), tool.name().white().bold());
+    // Phase 2: Display changes
+    println!();
+    println!("{}", "Changes to apply:".white().bold());
 
-        let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
+    let creates: Vec<_> = all_changes.iter().filter(|(_, c)| !c.is_conflict).collect();
+    let conflicts: Vec<_> = all_changes.iter().filter(|(_, c)| c.is_conflict).collect();
 
-        // Print results with colors
-        if !result.created.is_empty() {
-            println!("  {}:", "Created".green());
-            for file in &result.created {
-                println!("    {} {}", "✓".green(), file.white());
-            }
-        }
-
-        if !result.updated.is_empty() {
-            println!("  {}:", "Updated".yellow());
-            for file in &result.updated {
-                println!("    {} {}", "✓".yellow(), file.white());
-            }
-        }
-
-        if !result.skipped.is_empty() {
-            println!("  {}:", "Skipped".dimmed());
-            for file in &result.skipped {
-                println!("    {} {}", "-".dimmed(), file.dimmed());
-            }
-        }
-
-        println!();
+    for (tool_name, change) in &creates {
+        println!(
+            "  {} {} {} {}",
+            "CREATE".green().bold(),
+            change.path.white(),
+            format!("({})", change.section).dimmed(),
+            format!("[{}]", tool_name).dimmed()
+        );
     }
 
-    println!("{}", "✓ Preset applied successfully!".green().bold());
+    for (tool_name, change) in &conflicts {
+        println!(
+            "  {} {} {} {} {}",
+            "UPDATE".yellow().bold(),
+            change.path.white(),
+            "(conflict)".red(),
+            format!("({})", change.section).dimmed(),
+            format!("[{}]", tool_name).dimmed()
+        );
+    }
+
+    println!();
+
+    // Phase 3: Handle dry-run mode
+    if dry_run {
+        println!("{}", "═══ DRY RUN MODE ═══".yellow().bold());
+        if !conflicts.is_empty() {
+            println!(
+                "{} {} {}",
+                conflicts.len().to_string().yellow().bold(),
+                "conflict(s) found.".yellow(),
+                "Run without --dry-run to apply.".cyan()
+            );
+        } else {
+            println!("{}", "No conflicts. Run without --dry-run to apply.".cyan());
+        }
+        return Ok(());
+    }
+
+    // Phase 4: Determine conflict mode
+    let conflict_mode = if force {
+        ConflictMode::Force
+    } else if skip {
+        ConflictMode::Skip
+    } else if conflicts.is_empty() {
+        // No conflicts, proceed directly
+        ConflictMode::Force
+    } else {
+        // Ask user how to handle conflicts
+        ask_conflict_resolution(conflicts.len())?
+    };
+
+    // Phase 5: Apply changes
+    println!("{}", "Applying...".cyan());
+
+    for tool in tools {
+        let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
+
+        let has_changes =
+            !result.created.is_empty() || !result.updated.is_empty() || !result.skipped.is_empty();
+
+        if has_changes {
+            println!("\n{} {}", "Applied to".cyan(), tool.name().white().bold());
+
+            if !result.created.is_empty() {
+                println!("  {}:", "Created".green());
+                for file in &result.created {
+                    println!("    {} {}", "+".green(), file.white());
+                }
+            }
+
+            if !result.updated.is_empty() {
+                println!("  {}:", "Updated".yellow());
+                for file in &result.updated {
+                    println!("    {} {}", "~".yellow(), file.white());
+                }
+            }
+
+            if !result.skipped.is_empty() {
+                println!("  {}:", "Skipped".dimmed());
+                for file in &result.skipped {
+                    println!("    {} {}", "-".dimmed(), file.dimmed());
+                }
+            }
+        }
+    }
+
+    println!();
+    println!("{}", "Preset applied successfully!".green().bold());
 
     Ok(())
+}
+
+/// Ask user how to handle conflicts
+fn ask_conflict_resolution(conflict_count: usize) -> Result<ConflictMode> {
+    println!(
+        "{} {} {}",
+        conflict_count.to_string().yellow().bold(),
+        "conflict(s) found.".yellow(),
+        "How to proceed?".white()
+    );
+    println!("  [f]orce    - overwrite all conflicts");
+    println!("  [s]kip     - skip all conflicts, create new files only");
+    println!("  [i]nteract - decide for each file");
+    println!("  [c]ancel   - abort operation");
+    print!("\n{} ", "Your choice:".cyan());
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    match input.trim().to_lowercase().as_str() {
+        "f" | "force" => Ok(ConflictMode::Force),
+        "s" | "skip" => Ok(ConflictMode::Skip),
+        "i" | "interact" | "interactive" => Ok(ConflictMode::Ask),
+        "c" | "cancel" | "" => {
+            println!("{}", "Operation cancelled.".yellow());
+            std::process::exit(0);
+        }
+        _ => {
+            println!("{}", "Invalid choice. Cancelling.".red());
+            std::process::exit(1);
+        }
+    }
 }
