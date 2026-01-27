@@ -28,6 +28,97 @@ error() {
     exit 1
 }
 
+# Markers for shell profile
+MARKER_START="# >>> aidot >>>"
+MARKER_END="# <<< aidot <<<"
+
+# Detect shell profile file
+detect_shell_profile() {
+    local shell_name
+    shell_name=$(basename "$SHELL")
+
+    case "$shell_name" in
+        zsh)
+            echo "$HOME/.zshrc"
+            ;;
+        bash)
+            # Prefer .bashrc, fallback to .bash_profile
+            if [ -f "$HOME/.bashrc" ]; then
+                echo "$HOME/.bashrc"
+            elif [ -f "$HOME/.bash_profile" ]; then
+                echo "$HOME/.bash_profile"
+            else
+                echo "$HOME/.bashrc"
+            fi
+            ;;
+        fish)
+            echo "$HOME/.config/fish/config.fish"
+            ;;
+        *)
+            # Default to .profile for other shells
+            echo "$HOME/.profile"
+            ;;
+    esac
+}
+
+# Add PATH to shell profile
+add_to_path() {
+    local profile_file
+    profile_file=$(detect_shell_profile)
+
+    # Check if already added by looking for our marker
+    if [ -f "$profile_file" ] && grep -q "$MARKER_START" "$profile_file"; then
+        info "PATH already configured in $profile_file"
+        return 0
+    fi
+
+    # Create profile file if it doesn't exist
+    if [ ! -f "$profile_file" ]; then
+        touch "$profile_file"
+    fi
+
+    # Create fish config directory if needed
+    if [[ "$profile_file" == *"fish"* ]]; then
+        mkdir -p "$(dirname "$profile_file")"
+        # Fish shell uses different syntax
+        {
+            echo ""
+            echo "$MARKER_START"
+            echo "set -gx PATH \$PATH $INSTALL_DIR"
+            echo "$MARKER_END"
+        } >> "$profile_file"
+    else
+        # Bash/Zsh/POSIX shell syntax
+        {
+            echo ""
+            echo "$MARKER_START"
+            echo "export PATH=\"\$PATH:$INSTALL_DIR\""
+            echo "$MARKER_END"
+        } >> "$profile_file"
+    fi
+
+    info "Added aidot to PATH in $profile_file"
+    echo ""
+    echo "To use aidot now, run:"
+    echo ""
+    echo "  source $profile_file"
+    echo ""
+    echo "Or open a new terminal."
+}
+
+# Remove PATH from shell profile
+remove_from_path() {
+    local profile_file
+    profile_file=$(detect_shell_profile)
+
+    if [ -f "$profile_file" ] && grep -q "$MARKER_START" "$profile_file"; then
+        # Remove the aidot block from profile
+        sed -i.bak "/$MARKER_START/,/$MARKER_END/d" "$profile_file"
+        rm -f "${profile_file}.bak"
+        info "Removed aidot from PATH in $profile_file"
+    fi
+}
+
 # Check if git is installed
 check_git() {
     if command -v git &> /dev/null; then
@@ -93,6 +184,7 @@ get_latest_version() {
 install() {
     local platform version download_url temp_dir archive_name
     local prerelease="${1:-false}"
+    local no_add_path="${2:-false}"
 
     # Check if git is installed (required for remote repository features)
     if ! check_git; then
@@ -140,14 +232,20 @@ install() {
         error "Installation failed"
     fi
 
-    # Check if INSTALL_DIR is in PATH
+    # Add to PATH if not already there
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-        warn "Note: ${INSTALL_DIR} is not in your PATH"
-        echo ""
-        echo "Add the following to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-        echo ""
-        echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
-        echo ""
+        if [ "$no_add_path" = "true" ]; then
+            warn "Note: ${INSTALL_DIR} is not in your PATH"
+            echo ""
+            echo "Add the following to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+            echo ""
+            echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+            echo ""
+        else
+            add_to_path
+        fi
+    else
+        info "PATH already contains ${INSTALL_DIR}"
     fi
 
     # Print version
@@ -161,6 +259,8 @@ uninstall() {
     if [ -f "${INSTALL_DIR}/${BINARY_NAME}" ]; then
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
         info "Uninstalled aidot from ${INSTALL_DIR}"
+        # Remove PATH entry from shell profile
+        remove_from_path
     else
         warn "aidot is not installed in ${INSTALL_DIR}"
     fi
@@ -169,23 +269,27 @@ uninstall() {
 # Main
 COMMAND="${1:-install}"
 PRERELEASE="false"
+NO_ADD_PATH="false"
 
-# Check for --prerelease flag
+# Check for flags
 for arg in "$@"; do
     if [ "$arg" = "--prerelease" ] || [ "$arg" = "-prerelease" ]; then
         PRERELEASE="true"
+    fi
+    if [ "$arg" = "--no-add-path" ] || [ "$arg" = "-no-add-path" ]; then
+        NO_ADD_PATH="true"
     fi
 done
 
 case "$COMMAND" in
     install)
-        install "$PRERELEASE"
+        install "$PRERELEASE" "$NO_ADD_PATH"
         ;;
     uninstall)
         uninstall
         ;;
     *)
-        echo "Usage: $0 [install|uninstall] [--prerelease]"
+        echo "Usage: $0 [install|uninstall] [--prerelease] [--no-add-path]"
         exit 1
         ;;
 esac
