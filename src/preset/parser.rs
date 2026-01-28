@@ -174,7 +174,11 @@ mod tests {
 
         // Create root directory with valid files
         fs::create_dir_all(preset_dir.join("root")).unwrap();
-        fs::write(preset_dir.join("root/.editorconfig"), "[*]\nindent_size = 4").unwrap();
+        fs::write(
+            preset_dir.join("root/.editorconfig"),
+            "[*]\nindent_size = 4",
+        )
+        .unwrap();
         fs::write(preset_dir.join("root/.prettierrc"), "{}").unwrap();
 
         let files = parse_root_directory(preset_dir, "root").unwrap();

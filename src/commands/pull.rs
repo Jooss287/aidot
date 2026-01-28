@@ -232,8 +232,13 @@ fn apply_root_files(
     for file in root_files {
         let target_path = target_dir.join(&file.relative_path);
 
-        current_mode =
-            write_with_conflict(&target_path, &file.content, current_mode, &mut result, &file.relative_path)?;
+        current_mode = write_with_conflict(
+            &target_path,
+            &file.content,
+            current_mode,
+            &mut result,
+            &file.relative_path,
+        )?;
     }
 
     Ok(result)

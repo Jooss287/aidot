@@ -73,7 +73,6 @@ impl PresetConfig {
         let config: PresetConfig = toml::from_str(&content)?;
         Ok(config)
     }
-
 }
 
 #[cfg(test)]
