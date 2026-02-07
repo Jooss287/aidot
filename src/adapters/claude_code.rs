@@ -317,7 +317,12 @@ impl ToolAdapter for ClaudeCodeAdapter {
                 .claude_dir()
                 .join("rules")
                 .join(file.relative_path.replace("rules/", ""));
-            result.add_change(target, "rules".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "rules".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // Memory
@@ -334,7 +339,12 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let filename = file.relative_path.replace("commands/", "");
             let target = format!(".claude/commands/{}", filename);
             let target_path = self.claude_dir().join("commands").join(&filename);
-            result.add_change(target, "commands".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "commands".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // MCP
@@ -361,7 +371,12 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let filename = file.relative_path.replace("agents/", "");
             let target = format!(".claude/agents/{}", filename);
             let target_path = self.claude_dir().join("agents").join(&filename);
-            result.add_change(target, "agents".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "agents".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // Skills
@@ -369,7 +384,12 @@ impl ToolAdapter for ClaudeCodeAdapter {
             let filename = file.relative_path.replace("skills/", "");
             let target = format!(".claude/skills/{}", filename);
             let target_path = self.claude_dir().join("skills").join(&filename);
-            result.add_change(target, "skills".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "skills".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // Settings

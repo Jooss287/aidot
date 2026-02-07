@@ -340,7 +340,12 @@ impl ToolAdapter for CopilotAdapter {
             };
             let target = format!(".github/prompts/{}", prompt_name);
             let target_path = self.github_dir().join("prompts").join(&prompt_name);
-            result.add_change(target, "commands".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "commands".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // MCP → .vscode/mcp.json
@@ -362,7 +367,12 @@ impl ToolAdapter for CopilotAdapter {
             };
             let target = format!(".github/agents/{}", agent_name);
             let target_path = self.github_dir().join("agents").join(&agent_name);
-            result.add_change(target, "agents".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "agents".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // Skills → .github/skills/
@@ -370,7 +380,12 @@ impl ToolAdapter for CopilotAdapter {
             let filename = file.relative_path.replace("skills/", "");
             let target = format!(".github/skills/{}", filename);
             let target_path = self.github_dir().join("skills").join(&filename);
-            result.add_change(target, "skills".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "skills".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         result

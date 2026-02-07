@@ -1,5 +1,5 @@
 use crate::adapters::traits::{ApplyResult, PendingChange};
-use crate::adapters::{detect_tools, write_with_conflict, ConflictMode};
+use crate::adapters::{detect_tools, normalize_content, write_with_conflict, ConflictMode};
 use crate::error::Result;
 use crate::preset::parse_preset;
 use crate::repository;
@@ -85,13 +85,24 @@ pub fn pull_preset(
     // Scan root files first (tool-agnostic)
     for root_file in &preset_files.root {
         let target_path = target_dir.join(&root_file.relative_path);
-        let is_conflict = target_path.exists();
+        let (is_conflict, is_identical) = if target_path.exists() {
+            let is_identical = match std::fs::read_to_string(&target_path) {
+                Ok(existing) => {
+                    normalize_content(&existing) == normalize_content(&root_file.content)
+                }
+                Err(_) => false,
+            };
+            (true, is_identical)
+        } else {
+            (false, false)
+        };
         all_changes.push((
             "Root".to_string(),
             PendingChange {
                 path: root_file.relative_path.clone(),
                 section: "root".to_string(),
                 is_conflict,
+                is_identical,
             },
         ));
     }
@@ -114,7 +125,11 @@ pub fn pull_preset(
     println!("{}", "Changes to apply:".white().bold());
 
     let creates: Vec<_> = all_changes.iter().filter(|(_, c)| !c.is_conflict).collect();
-    let conflicts: Vec<_> = all_changes.iter().filter(|(_, c)| c.is_conflict).collect();
+    let conflicts: Vec<_> = all_changes
+        .iter()
+        .filter(|(_, c)| c.is_conflict && !c.is_identical)
+        .collect();
+    let unchanged: Vec<_> = all_changes.iter().filter(|(_, c)| c.is_identical).collect();
 
     for (tool_name, change) in &creates {
         println!(
@@ -137,16 +152,35 @@ pub fn pull_preset(
         );
     }
 
+    for (tool_name, change) in &unchanged {
+        println!(
+            "  {} {} {} {}",
+            "UNCHANGED".dimmed(),
+            change.path.dimmed(),
+            format!("({})", change.section).dimmed(),
+            format!("[{}]", tool_name).dimmed()
+        );
+    }
+
     println!();
 
     // Phase 3: Handle dry-run mode
     if dry_run {
         println!("{}", "═══ DRY RUN MODE ═══".yellow().bold());
         if !conflicts.is_empty() {
+            let mut summary_parts = vec![format!("{} conflict(s) found.", conflicts.len())];
+            if !unchanged.is_empty() {
+                summary_parts.push(format!("{} file(s) unchanged.", unchanged.len()));
+            }
             println!(
-                "{} {} {}",
-                conflicts.len().to_string().yellow().bold(),
-                "conflict(s) found.".yellow(),
+                "{} {}",
+                summary_parts.join(" ").yellow(),
+                "Run without --dry-run to apply.".cyan()
+            );
+        } else if !unchanged.is_empty() {
+            println!(
+                "{} {}",
+                format!("No conflicts. {} file(s) unchanged.", unchanged.len()).green(),
                 "Run without --dry-run to apply.".cyan()
             );
         } else {
@@ -191,8 +225,10 @@ pub fn pull_preset(
 
 /// Print apply result for a tool or root
 fn print_apply_result(name: &str, result: &ApplyResult) {
-    let has_changes =
-        !result.created.is_empty() || !result.updated.is_empty() || !result.skipped.is_empty();
+    let has_changes = !result.created.is_empty()
+        || !result.updated.is_empty()
+        || !result.skipped.is_empty()
+        || !result.unchanged.is_empty();
 
     if has_changes {
         println!("\n{} {}", "Applied to".cyan(), name.white().bold());
@@ -215,6 +251,13 @@ fn print_apply_result(name: &str, result: &ApplyResult) {
             println!("  {}:", "Skipped".dimmed());
             for file in &result.skipped {
                 println!("    {} {}", "-".dimmed(), file.dimmed());
+            }
+        }
+
+        if !result.unchanged.is_empty() {
+            println!("  {}:", "Unchanged".dimmed());
+            for file in &result.unchanged {
+                println!("    {} {}", "=".dimmed(), file.dimmed());
             }
         }
     }

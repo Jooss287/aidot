@@ -1,4 +1,5 @@
 use crate::adapters::detector::detect_tools;
+use crate::adapters::normalize_content;
 use crate::adapters::traits::PresetFiles;
 use crate::error::Result;
 use crate::preset::parser::parse_preset;
@@ -433,15 +434,4 @@ fn compare_file_exists(target_path: &Path, display_name: &str, result: &mut Diff
     } else {
         result.new_files.push(display_name.to_string());
     }
-}
-
-/// Normalize content for comparison (trim whitespace, normalize line endings)
-fn normalize_content(content: &str) -> String {
-    content
-        .lines()
-        .map(|line| line.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
 }

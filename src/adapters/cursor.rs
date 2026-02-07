@@ -325,7 +325,12 @@ impl ToolAdapter for CursorAdapter {
             let filename = file.relative_path.replace("commands/", "");
             let target = format!(".cursor/commands/{}", filename);
             let target_path = self.cursor_dir().join("commands").join(&filename);
-            result.add_change(target, "commands".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "commands".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // MCP
@@ -352,7 +357,12 @@ impl ToolAdapter for CursorAdapter {
             let filename = file.relative_path.replace("agents/", "");
             let target = format!(".cursor/agents/{}", filename);
             let target_path = self.cursor_dir().join("agents").join(&filename);
-            result.add_change(target, "agents".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "agents".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         // Skills
@@ -360,7 +370,12 @@ impl ToolAdapter for CursorAdapter {
             let filename = file.relative_path.replace("skills/", "");
             let target = format!(".cursor/skills/{}", filename);
             let target_path = self.cursor_dir().join("skills").join(&filename);
-            result.add_change(target, "skills".to_string(), target_path.exists());
+            result.add_change_with_content(
+                target,
+                "skills".to_string(),
+                &target_path,
+                &file.content,
+            );
         }
 
         result
