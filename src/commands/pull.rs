@@ -1,5 +1,7 @@
 use crate::adapters::traits::{ApplyResult, PendingChange};
-use crate::adapters::{detect_tools, normalize_content, write_with_conflict, ConflictMode};
+use crate::adapters::{
+    all_tools, detect_tools, normalize_content, write_with_conflict, ConflictMode,
+};
 use crate::error::Result;
 use crate::preset::parse_preset;
 use crate::repository;
@@ -30,33 +32,30 @@ pub fn pull_preset(
     // Get current directory as target
     let target_dir = std::env::current_dir()?;
 
-    // Detect available tools
-    let mut tools = detect_tools(&target_dir);
-
-    if tools.is_empty() {
-        println!("{}", "No LLM tools detected in current directory.".yellow());
-        println!("Run '{}' to see detection details.", "aidot detect".cyan());
-        return Ok(());
-    }
-
-    // Filter tools if specified
-    if let Some(ref filter) = tools_filter {
+    // Detect or create tools based on --tools filter
+    let tools = if let Some(ref filter) = tools_filter {
+        // When --tools is specified, use all adapters (bypass detection)
+        // so users can deploy to tools that haven't been set up yet
+        let all = all_tools(&target_dir);
         let filter_lower: Vec<String> = filter.iter().map(|s| s.to_lowercase()).collect();
-        tools.retain(|tool| {
-            let tool_name = tool.name().to_lowercase();
-            filter_lower.iter().any(|f| {
-                tool_name.contains(f)
-                    || f.contains(&tool_name)
-                    || match f.as_str() {
-                        "claude" => tool_name.contains("claude"),
-                        "cursor" => tool_name.contains("cursor"),
-                        "copilot" => tool_name.contains("copilot"),
-                        _ => false,
-                    }
+        let filtered: Vec<_> = all
+            .into_iter()
+            .filter(|tool| {
+                let tool_name = tool.name().to_lowercase();
+                filter_lower.iter().any(|f| {
+                    tool_name.contains(f)
+                        || f.contains(&tool_name)
+                        || match f.as_str() {
+                            "claude" => tool_name.contains("claude"),
+                            "cursor" => tool_name.contains("cursor"),
+                            "copilot" => tool_name.contains("copilot"),
+                            _ => false,
+                        }
+                })
             })
-        });
+            .collect();
 
-        if tools.is_empty() {
+        if filtered.is_empty() {
             println!(
                 "{} {}",
                 "No tools matched the filter:".yellow(),
@@ -64,7 +63,16 @@ pub fn pull_preset(
             );
             return Ok(());
         }
-    }
+        filtered
+    } else {
+        let detected = detect_tools(&target_dir);
+        if detected.is_empty() {
+            println!("{}", "No LLM tools detected in current directory.".yellow());
+            println!("Run '{}' to see detection details.", "aidot detect".cyan());
+            return Ok(());
+        }
+        detected
+    };
 
     println!(
         "{} {} {}",
