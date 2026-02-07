@@ -1,6 +1,12 @@
 use crate::error::Result;
 use colored::Colorize;
 
+/// Build-time version from AIDOT_VERSION env var, falls back to Cargo.toml version
+const VERSION: &str = match option_env!("AIDOT_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 const REPO_OWNER: &str = "Jooss287";
 const REPO_NAME: &str = "aidot";
 const BIN_NAME: &str = "aidot";
@@ -54,7 +60,7 @@ fn get_archive_ext() -> &'static str {
 
 /// Check for updates and optionally update to the latest version
 pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = VERSION;
     let target = get_target();
 
     println!(
