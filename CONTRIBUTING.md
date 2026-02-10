@@ -119,6 +119,33 @@ pub trait ToolAdapter {
 | `apply()` | 프리셋 파일을 도구별 형식으로 변환하여 저장 |
 | `preview()` | 실제 쓰기 없이 변경될 파일 목록 반환 |
 
+### 공용 헬퍼 함수
+
+`src/adapters/traits.rs`에서 제공하는 헬퍼 함수를 활용하세요:
+
+| 함수 | 용도 | 예시 |
+|------|------|------|
+| `strip_section_prefix()` | 섹션 경로 접두사 제거 | `"rules/code.md"` → `"code.md"` |
+| `add_suffix_before_ext()` | `.md` 앞에 접미사 삽입 | `"build.md"` + `"prompt"` → `"build.prompt.md"` |
+| `convert_frontmatter_key()` | 프론트매터 키 변환 | `globs:` → `applyTo:` |
+| `has_frontmatter()` | YAML 프론트매터 존재 확인 | `---\n...\n---` 감지 |
+| `normalize_content()` | 내용 정규화 비교 | 줄 끝 공백/줄바꿈 정규화 |
+| `write_with_conflict()` | 충돌 처리 포함 파일 쓰기 | 자동 스킵, 덮어쓰기, diff 표시 |
+
+```rust
+use super::traits::{
+    strip_section_prefix, add_suffix_before_ext, convert_frontmatter_key,
+    has_frontmatter, write_with_conflict, // ...
+};
+
+// 예: 프리셋 rules/code-style.md → .mytool/instructions/code-style.instructions.md
+let name = strip_section_prefix(&file.relative_path, "rules");
+let filename = add_suffix_before_ext(&name, "instructions");
+
+// 예: 프론트매터 globs → paths 키 변환
+let content = convert_frontmatter_key(&file.content, "globs", "paths");
+```
+
 ### 구현 방법
 
 기존 어댑터를 참고하여 구현하세요:

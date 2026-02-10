@@ -230,7 +230,7 @@ directory = "settings/"
 
 | 프리셋 | 변환 결과 |
 |--------|-----------|
-| `rules/*.md` | `.cursorrules` |
+| `rules/*.md` | `.cursor/rules/*.md` 또는 `*.mdc` (프론트매터 포함 시) |
 | `memory/*.md` | `.cursorrules` (Always Apply 섹션) |
 | `commands/*.md` | `.cursor/commands/` |
 | `mcp/*.json` | `.cursor/mcp.json` |
@@ -242,7 +242,7 @@ directory = "settings/"
 
 | 프리셋 | 변환 결과 |
 |--------|-----------|
-| `rules/*.md` | `.github/copilot-instructions.md` |
+| `rules/*.md` | `.github/instructions/*.instructions.md` |
 | `memory/*.md` | `.github/copilot-instructions.md` (Project Context) |
 | `commands/*.md` | `.github/prompts/*.prompt.md` |
 | `mcp/*.json` | `.vscode/mcp.json` |

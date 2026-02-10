@@ -1,6 +1,6 @@
 use super::traits::{
-    write_with_conflict, ApplyResult, ConflictMode, PresetFile, PresetFiles, ScanResult,
-    ToolAdapter,
+    strip_section_prefix, write_with_conflict, ApplyResult, ConflictMode, PresetFile, PresetFiles,
+    ScanResult, ToolAdapter,
 };
 use crate::error::Result;
 use std::fs;
@@ -47,7 +47,7 @@ impl ClaudeCodeAdapter {
         fs::create_dir_all(&rules_dir)?;
 
         for file in files {
-            let relative = file.relative_path.replace("rules/", "");
+            let relative = strip_section_prefix(&file.relative_path, "rules");
             let target_path = rules_dir.join(&relative);
             let display_path = format!(".claude/rules/{}", relative);
 
@@ -99,7 +99,7 @@ impl ClaudeCodeAdapter {
         fs::create_dir_all(&commands_dir)?;
 
         for file in files {
-            let filename = file.relative_path.replace("commands/", "");
+            let filename = strip_section_prefix(&file.relative_path, "commands");
             let target_path = commands_dir.join(&filename);
             let display_path = format!(".claude/commands/{}", filename);
 
@@ -138,7 +138,7 @@ impl ClaudeCodeAdapter {
         // Merge MCP configurations
         for file in files {
             let mcp_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let server_name = file.relative_path.replace("mcp/", "").replace(".json", "");
+            let server_name = strip_section_prefix(&file.relative_path, "mcp").replace(".json", "");
 
             settings["mcpServers"][server_name] = mcp_config;
         }
@@ -171,10 +171,7 @@ impl ClaudeCodeAdapter {
         // Merge all hooks into one JSON object
         let mut hooks = serde_json::Map::new();
         for file in files {
-            let hook_name = file
-                .relative_path
-                .replace("hooks/", "")
-                .replace(".json", "");
+            let hook_name = strip_section_prefix(&file.relative_path, "hooks").replace(".json", "");
             let hook_config: serde_json::Value = serde_json::from_str(&file.content)?;
             hooks.insert(hook_name, hook_config);
         }
@@ -200,7 +197,7 @@ impl ClaudeCodeAdapter {
         fs::create_dir_all(&agents_dir)?;
 
         for file in files {
-            let filename = file.relative_path.replace("agents/", "");
+            let filename = strip_section_prefix(&file.relative_path, "agents");
             let target_path = agents_dir.join(&filename);
             let display_path = format!(".claude/agents/{}", filename);
 
@@ -225,7 +222,7 @@ impl ClaudeCodeAdapter {
         fs::create_dir_all(&skills_dir)?;
 
         for file in files {
-            let filename = file.relative_path.replace("skills/", "");
+            let filename = strip_section_prefix(&file.relative_path, "skills");
             let target_path = skills_dir.join(&filename);
             let display_path = format!(".claude/skills/{}", filename);
 
@@ -312,11 +309,9 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Rules
         for file in &preset_files.rules {
-            let target = format!(".claude/rules/{}", file.relative_path.replace("rules/", ""));
-            let target_path = self
-                .claude_dir()
-                .join("rules")
-                .join(file.relative_path.replace("rules/", ""));
+            let filename = strip_section_prefix(&file.relative_path, "rules");
+            let target = format!(".claude/rules/{}", filename);
+            let target_path = self.claude_dir().join("rules").join(&filename);
             result.add_change_with_content(
                 target,
                 "rules".to_string(),
@@ -336,7 +331,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Commands
         for file in &preset_files.commands {
-            let filename = file.relative_path.replace("commands/", "");
+            let filename = strip_section_prefix(&file.relative_path, "commands");
             let target = format!(".claude/commands/{}", filename);
             let target_path = self.claude_dir().join("commands").join(&filename);
             result.add_change_with_content(
@@ -368,7 +363,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Agents
         for file in &preset_files.agents {
-            let filename = file.relative_path.replace("agents/", "");
+            let filename = strip_section_prefix(&file.relative_path, "agents");
             let target = format!(".claude/agents/{}", filename);
             let target_path = self.claude_dir().join("agents").join(&filename);
             result.add_change_with_content(
@@ -381,7 +376,7 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         // Skills
         for file in &preset_files.skills {
-            let filename = file.relative_path.replace("skills/", "");
+            let filename = strip_section_prefix(&file.relative_path, "skills");
             let target = format!(".claude/skills/{}", filename);
             let target_path = self.claude_dir().join("skills").join(&filename);
             result.add_change_with_content(
