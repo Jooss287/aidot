@@ -60,11 +60,11 @@ fn get_archive_ext() -> &'static str {
 
 /// Check for updates and optionally update to the latest version
 pub fn check_update(check_only: bool, include_prerelease: bool) -> Result<()> {
-    let current_version = VERSION;
+    let current_version = VERSION.strip_prefix('v').unwrap_or(VERSION);
     let target = get_target();
 
     println!(
-        "{} {} ({})",
+        "{} v{} ({})",
         "Current version:".cyan(),
         current_version.white().bold(),
         target.dimmed()
