@@ -99,6 +99,7 @@ cargo build --release
 | `aidot status` | 현재 설정 상태 확인 |
 | `aidot diff <name>` | 프리셋과 현재 설정 비교 |
 | `aidot cache update` | 캐시된 저장소 업데이트 |
+| `aidot update` | aidot 바이너리 자체 업데이트 |
 
 ### 저장소 관리
 

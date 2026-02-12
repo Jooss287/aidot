@@ -1,7 +1,9 @@
-use super::traits::{
-    strip_section_prefix, write_with_conflict, ApplyResult, ConflictMode, PresetFile, PresetFiles,
-    ScanResult, ToolAdapter,
+use super::common::{
+    apply_json_merge, apply_one_to_one, ensure_dir, scan_merged_section, scan_one_to_one,
 };
+use super::conflict::{write_with_conflict, ConflictMode};
+use super::helpers::{is_command_available, strip_section_prefix};
+use super::traits::{ApplyResult, PresetFile, PresetFiles, ScanResult, ToolAdapter};
 use crate::error::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,40 +23,6 @@ impl ClaudeCodeAdapter {
     /// Get the .claude directory path
     fn claude_dir(&self) -> PathBuf {
         self.project_dir.join(".claude")
-    }
-
-    /// Ensure .claude directory exists
-    fn ensure_claude_dir(&self) -> Result<()> {
-        let claude_dir = self.claude_dir();
-        if !claude_dir.exists() {
-            fs::create_dir_all(&claude_dir)?;
-        }
-        Ok(())
-    }
-
-    /// Apply rules files: rules/*.md → .claude/rules/
-    fn apply_rules(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let rules_dir = self.claude_dir().join("rules");
-        fs::create_dir_all(&rules_dir)?;
-
-        for file in files {
-            let relative = strip_section_prefix(&file.relative_path, "rules");
-            let target_path = rules_dir.join(&relative);
-            let display_path = format!(".claude/rules/{}", relative);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
     }
 
     /// Apply memory files: memory/*.md → .claude/CLAUDE.md
@@ -84,77 +52,6 @@ impl ClaudeCodeAdapter {
         Ok(())
     }
 
-    /// Apply commands: commands/*.md → .claude/commands/
-    fn apply_commands(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let commands_dir = self.claude_dir().join("commands");
-        fs::create_dir_all(&commands_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "commands");
-            let target_path = commands_dir.join(&filename);
-            let display_path = format!(".claude/commands/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply MCP configs: mcp/*.json → .claude/settings.local.json (mcpServers section)
-    fn apply_mcp(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let settings_file = self.claude_dir().join("settings.local.json");
-
-        // Read existing settings or create new
-        let mut settings: serde_json::Value = if settings_file.exists() {
-            let content = fs::read_to_string(&settings_file)?;
-            serde_json::from_str(&content)?
-        } else {
-            serde_json::json!({})
-        };
-
-        // Ensure mcpServers object exists
-        if settings.get("mcpServers").is_none() {
-            settings["mcpServers"] = serde_json::json!({});
-        }
-
-        // Merge MCP configurations
-        for file in files {
-            let mcp_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let server_name = strip_section_prefix(&file.relative_path, "mcp").replace(".json", "");
-
-            settings["mcpServers"][server_name] = mcp_config;
-        }
-
-        let json_str = serde_json::to_string_pretty(&settings)?;
-        write_with_conflict(
-            &settings_file,
-            &json_str,
-            mode,
-            result,
-            ".claude/settings.local.json",
-        )?;
-
-        Ok(())
-    }
-
     /// Apply hooks: hooks/*.json → .claude/hooks.json
     fn apply_hooks(
         &self,
@@ -178,56 +75,6 @@ impl ClaudeCodeAdapter {
 
         let json_str = serde_json::to_string_pretty(&serde_json::Value::Object(hooks))?;
         write_with_conflict(&hooks_file, &json_str, mode, result, ".claude/hooks.json")?;
-
-        Ok(())
-    }
-
-    /// Apply agents: agents/*.md → .claude/agents/
-    fn apply_agents(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let agents_dir = self.claude_dir().join("agents");
-        fs::create_dir_all(&agents_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "agents");
-            let target_path = agents_dir.join(&filename);
-            let display_path = format!(".claude/agents/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply skills: skills/*.ts → .claude/skills/
-    fn apply_skills(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let skills_dir = self.claude_dir().join("skills");
-        fs::create_dir_all(&skills_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target_path = skills_dir.join(&filename);
-            let display_path = format!(".claude/skills/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
 
         Ok(())
     }
@@ -284,117 +131,81 @@ impl ToolAdapter for ClaudeCodeAdapter {
     }
 
     fn detect(&self) -> bool {
-        // Check if .claude directory exists or if 'claude' command is available
-        let claude_dir = self.claude_dir();
-        if claude_dir.exists() {
-            return true;
-        }
-
-        // Check if claude command exists
-        #[cfg(target_os = "windows")]
-        let check_cmd = std::process::Command::new("where").arg("claude").output();
-
-        #[cfg(not(target_os = "windows"))]
-        let check_cmd = std::process::Command::new("which").arg("claude").output();
-
-        check_cmd
-            .map(|output| output.status.success())
-            .unwrap_or(false)
+        self.claude_dir().exists() || is_command_available("claude")
     }
 
     fn scan(&self, preset_files: &PresetFiles, _target_dir: &Path) -> ScanResult {
         let mut result = ScanResult::new();
-        let claude_md = self.claude_dir().join("CLAUDE.md");
-        let settings_file = self.claude_dir().join("settings.local.json");
+        let claude_dir = self.claude_dir();
+        let settings_file = claude_dir.join("settings.local.json");
 
-        // Rules
-        for file in &preset_files.rules {
-            let filename = strip_section_prefix(&file.relative_path, "rules");
-            let target = format!(".claude/rules/{}", filename);
-            let target_path = self.claude_dir().join("rules").join(&filename);
-            result.add_change_with_content(
-                target,
-                "rules".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // 1:1 mapped sections
+        scan_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &claude_dir.join("rules"),
+            ".claude/rules",
+            &mut result,
+            None,
+            None,
+        );
+        scan_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &claude_dir.join("commands"),
+            ".claude/commands",
+            &mut result,
+            None,
+            None,
+        );
+        scan_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &claude_dir.join("agents"),
+            ".claude/agents",
+            &mut result,
+            None,
+            None,
+        );
+        scan_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &claude_dir.join("skills"),
+            ".claude/skills",
+            &mut result,
+            None,
+            None,
+        );
 
-        // Memory
+        // Merged sections
         if !preset_files.memory.is_empty() {
             result.add_change(
                 ".claude/CLAUDE.md".to_string(),
                 "memory".to_string(),
-                claude_md.exists(),
+                claude_dir.join("CLAUDE.md").exists(),
             );
         }
-
-        // Commands
-        for file in &preset_files.commands {
-            let filename = strip_section_prefix(&file.relative_path, "commands");
-            let target = format!(".claude/commands/{}", filename);
-            let target_path = self.claude_dir().join("commands").join(&filename);
-            result.add_change_with_content(
-                target,
-                "commands".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
-
-        // MCP
-        if !preset_files.mcp.is_empty() {
-            result.add_change(
-                ".claude/settings.local.json".to_string(),
-                "mcp".to_string(),
-                settings_file.exists(),
-            );
-        }
-
-        // Hooks
-        if !preset_files.hooks.is_empty() {
-            let hooks_file = self.claude_dir().join("hooks.json");
-            result.add_change(
-                ".claude/hooks.json".to_string(),
-                "hooks".to_string(),
-                hooks_file.exists(),
-            );
-        }
-
-        // Agents
-        for file in &preset_files.agents {
-            let filename = strip_section_prefix(&file.relative_path, "agents");
-            let target = format!(".claude/agents/{}", filename);
-            let target_path = self.claude_dir().join("agents").join(&filename);
-            result.add_change_with_content(
-                target,
-                "agents".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
-
-        // Skills
-        for file in &preset_files.skills {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target = format!(".claude/skills/{}", filename);
-            let target_path = self.claude_dir().join("skills").join(&filename);
-            result.add_change_with_content(
-                target,
-                "skills".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
-
-        // Settings
-        if !preset_files.settings.is_empty() {
-            result.add_change(
-                ".claude/settings.local.json".to_string(),
-                "settings".to_string(),
-                settings_file.exists(),
-            );
-        }
+        scan_merged_section(
+            &preset_files.mcp,
+            ".claude/settings.local.json",
+            "mcp",
+            &settings_file,
+            &mut result,
+        );
+        scan_merged_section(
+            &preset_files.hooks,
+            ".claude/hooks.json",
+            "hooks",
+            &claude_dir.join("hooks.json"),
+            &mut result,
+        );
+        scan_merged_section(
+            &preset_files.settings,
+            ".claude/settings.local.json",
+            "settings",
+            &settings_file,
+            &mut result,
+        );
 
         result
     }
@@ -405,20 +216,67 @@ impl ToolAdapter for ClaudeCodeAdapter {
         _target_dir: &Path,
         conflict_mode: &mut ConflictMode,
     ) -> Result<ApplyResult> {
-        self.ensure_claude_dir()?;
+        ensure_dir(&self.claude_dir())?;
 
         let mut result = ApplyResult::new();
+        let claude_dir = self.claude_dir();
 
         // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
-        self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
+        apply_json_merge(
+            &preset_files.mcp,
+            "mcp",
+            &claude_dir.join("settings.local.json"),
+            ".claude/settings.local.json",
+            "mcpServers",
+            serde_json::json!({}),
+            &mut result,
+            conflict_mode,
+        )?;
         self.apply_hooks(&preset_files.hooks, &mut result, conflict_mode)?;
         self.apply_settings(&preset_files.settings, &mut result, conflict_mode)?;
+
         // 1:1 mapped sections (resolved immediately from PreResolved map)
-        self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
-        self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
-        self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
-        self.apply_skills(&preset_files.skills, &mut result, conflict_mode)?;
+        apply_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &claude_dir.join("rules"),
+            ".claude/rules",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &claude_dir.join("commands"),
+            ".claude/commands",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &claude_dir.join("agents"),
+            ".claude/agents",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &claude_dir.join("skills"),
+            ".claude/skills",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
 
         Ok(result)
     }

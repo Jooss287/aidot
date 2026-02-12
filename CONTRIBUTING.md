@@ -37,18 +37,22 @@ cargo fmt
 
 ```
 src/
-├── main.rs              # 엔트리 포인트
+├── main.rs              # 엔트리 포인트 (CLI 라우팅)
 ├── cli.rs               # CLI 정의 (clap)
 ├── commands/            # 명령어 구현
 │   ├── init.rs          # 프리셋 초기화
 │   ├── pull.rs          # 프리셋 적용
-│   ├── repo.rs          # 저장소 관리
+│   ├── repo.rs          # 저장소 관리 (add/list/remove/set-default)
 │   ├── detect.rs        # LLM 도구 감지
 │   ├── status.rs        # 상태 확인
 │   ├── cache.rs         # 캐시 관리
-│   └── diff.rs          # 설정 비교
+│   ├── diff.rs          # 설정 비교 (scan 결과 기반)
+│   └── update.rs        # 업데이트 확인
 ├── adapters/            # 도구별 어댑터
-│   ├── traits.rs        # ToolAdapter trait 정의
+│   ├── traits.rs        # ToolAdapter trait, PresetFiles, ScanResult, ApplyResult 정의
+│   ├── common.rs        # 공용 어댑터 로직 (apply_one_to_one, apply_json_merge 등)
+│   ├── helpers.rs       # 유틸리티 함수 (strip_section_prefix, has_frontmatter 등)
+│   ├── conflict.rs      # 충돌 처리 (ConflictMode, write_with_conflict 등)
 │   ├── detector.rs      # 도구 자동 감지 로직
 │   ├── claude_code.rs   # Claude Code 어댑터
 │   ├── cursor.rs        # Cursor 어댑터
@@ -56,11 +60,10 @@ src/
 ├── preset/              # 프리셋 처리
 │   ├── config.rs        # .aidot-config.toml 파싱
 │   └── parser.rs        # 프리셋 파일 읽기
-├── repository.rs        # 저장소 관리
+├── repository.rs        # 저장소 소스 해석 (이름/URL/로컬 경로)
 ├── cache.rs             # 캐시 시스템 (~/.aidot/cache/)
 ├── git.rs               # Git 작업 (clone, pull)
 ├── config.rs            # 글로벌 설정 (~/.aidot/config.toml)
-├── merge.rs             # 파일 병합 전략
 └── error.rs             # 에러 타입 정의
 ```
 
@@ -70,90 +73,30 @@ src/
 
 aidot은 **어댑터 패턴**을 사용하여 여러 LLM 도구를 지원합니다.
 
-### 핵심 흐름
-
 ```
-1. 사용자가 `aidot pull team` 실행
-                ↓
-2. Git에서 프리셋 저장소 가져오기
-                ↓
-3. .aidot-config.toml 파싱
-                ↓
-4. 설치된 LLM 도구 자동 감지 (detector.rs)
-                ↓
-5. 각 도구의 어댑터가 프리셋을 도구별 형식으로 변환
-                ↓
-6. 변환된 설정 파일을 프로젝트에 적용
+aidot pull → 프리셋 가져오기 → 파싱 → 도구 감지 → 어댑터 변환 → 파일 적용
 ```
 
-### 주요 컴포넌트
-
-| 컴포넌트 | 역할 |
-|----------|------|
-| `ToolAdapter` | 각 LLM 도구가 구현해야 하는 trait |
-| `PresetFiles` | 섹션별로 정리된 프리셋 파일 컬렉션 |
-| `MergeStrategy` | 파일 병합 방식 (concat, replace) |
-| `ConflictMode` | 파일 충돌 처리 방식 (force, skip, ask) |
+핵심 타입은 `adapters/traits.rs`에 정의되어 있으며, 공용 로직은 `common.rs`, `helpers.rs`, `conflict.rs`에 분리되어 있습니다.
 
 ---
 
 ## 새 LLM 도구 어댑터 추가하기
 
-새로운 LLM 도구(예: Aider, Continue 등)를 지원하려면 `ToolAdapter` trait을 구현합니다.
-
-### ToolAdapter trait
+`ToolAdapter` trait (`adapters/traits.rs`)을 구현하면 새로운 LLM 도구를 지원할 수 있습니다.
 
 ```rust
 pub trait ToolAdapter {
-    fn name(&self) -> &str;       // 도구 이름 (예: "Claude Code")
-    fn detect(&self) -> bool;     // 도구 설치 여부 감지
-    fn apply(...) -> Result<ApplyResult>;   // 프리셋 적용
-    fn preview(...) -> PreviewResult;       // dry-run 미리보기
+    fn name(&self) -> &str;                          // 도구 이름
+    fn detect(&self) -> bool;                        // 설치 여부 감지
+    fn scan(&self, ...) -> ScanResult;               // 변경 사항 스캔
+    fn apply(&self, ...) -> Result<ApplyResult>;     // 프리셋 적용
 }
 ```
 
-| 메서드 | 역할 |
-|--------|------|
-| `name()` | CLI 출력에 표시할 도구 이름 |
-| `detect()` | CLI 존재 여부, 설정 파일 존재 여부 등으로 감지 |
-| `apply()` | 프리셋 파일을 도구별 형식으로 변환하여 저장 |
-| `preview()` | 실제 쓰기 없이 변경될 파일 목록 반환 |
+기존 어댑터(`cursor.rs`, `claude_code.rs`, `copilot.rs`)를 참고하세요. `common.rs`의 `apply_one_to_one()`, `apply_json_merge()` 등 공용 함수를 활용하면 중복 없이 구현할 수 있습니다.
 
-### 공용 헬퍼 함수
-
-`src/adapters/traits.rs`에서 제공하는 헬퍼 함수를 활용하세요:
-
-| 함수 | 용도 | 예시 |
-|------|------|------|
-| `strip_section_prefix()` | 섹션 경로 접두사 제거 | `"rules/code.md"` → `"code.md"` |
-| `add_suffix_before_ext()` | `.md` 앞에 접미사 삽입 | `"build.md"` + `"prompt"` → `"build.prompt.md"` |
-| `convert_frontmatter_key()` | 프론트매터 키 변환 | `globs:` → `applyTo:` |
-| `has_frontmatter()` | YAML 프론트매터 존재 확인 | `---\n...\n---` 감지 |
-| `normalize_content()` | 내용 정규화 비교 | 줄 끝 공백/줄바꿈 정규화 |
-| `write_with_conflict()` | 충돌 처리 포함 파일 쓰기 | 자동 스킵, 덮어쓰기, diff 표시 |
-
-```rust
-use super::traits::{
-    strip_section_prefix, add_suffix_before_ext, convert_frontmatter_key,
-    has_frontmatter, write_with_conflict, // ...
-};
-
-// 예: 프리셋 rules/code-style.md → .mytool/instructions/code-style.instructions.md
-let name = strip_section_prefix(&file.relative_path, "rules");
-let filename = add_suffix_before_ext(&name, "instructions");
-
-// 예: 프론트매터 globs → paths 키 변환
-let content = convert_frontmatter_key(&file.content, "globs", "paths");
-```
-
-### 구현 방법
-
-기존 어댑터를 참고하여 구현하세요:
-- `src/adapters/cursor.rs` - Cursor 어댑터
-- `src/adapters/claude_code.rs` - Claude Code 어댑터
-- `src/adapters/copilot.rs` - GitHub Copilot 어댑터
-
-새 어댑터 구현 후 `src/adapters/mod.rs`에 등록하고, `detector.rs`의 감지 목록에 추가합니다.
+새 어댑터 구현 후 `adapters/mod.rs`에 등록하고, `detector.rs`의 감지 목록에 추가합니다.
 
 ---
 

@@ -1,7 +1,9 @@
-use super::traits::{
-    has_frontmatter, strip_section_prefix, write_with_conflict, ApplyResult, ConflictMode,
-    PresetFile, PresetFiles, ScanResult, ToolAdapter,
+use super::common::{
+    apply_json_merge, apply_one_to_one, ensure_dir, scan_merged_section, scan_one_to_one,
 };
+use super::conflict::{write_with_conflict, ConflictMode};
+use super::helpers::{has_frontmatter, is_command_available, strip_section_prefix};
+use super::traits::{ApplyResult, PresetFile, PresetFiles, ScanResult, ToolAdapter};
 use crate::error::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -37,54 +39,18 @@ impl CursorAdapter {
         self.project_dir.join(".cursorrules")
     }
 
-    /// Ensure .cursor directory exists
-    fn ensure_cursor_dir(&self) -> Result<()> {
-        let cursor_dir = self.cursor_dir();
-        if !cursor_dir.exists() {
-            fs::create_dir_all(&cursor_dir)?;
-        }
-        Ok(())
-    }
-
     /// Determine the target filename for a rule file based on frontmatter presence.
     /// Files with YAML frontmatter get .mdc extension, others keep .md.
-    fn rule_target_filename(relative_path: &str, content: &str) -> String {
-        let filename = strip_section_prefix(relative_path, "rules");
+    fn rule_filename(name: &str, content: &str) -> String {
         if has_frontmatter(content) {
-            // If front matter exists, convert .md to .mdc
-            if let Some(stem) = filename.strip_suffix(".md") {
+            if let Some(stem) = name.strip_suffix(".md") {
                 format!("{}.mdc", stem)
             } else {
-                filename
+                name.to_string()
             }
         } else {
-            filename
+            name.to_string()
         }
-    }
-
-    /// Apply rules files: rules/*.md → .cursor/rules/*.md or *.mdc
-    fn apply_rules(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let rules_dir = self.cursor_dir().join("rules");
-        fs::create_dir_all(&rules_dir)?;
-
-        for file in files {
-            let filename = Self::rule_target_filename(&file.relative_path, &file.content);
-            let target_path = rules_dir.join(&filename);
-            let display_path = format!(".cursor/rules/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
     }
 
     /// Apply memory files: memory/*.md → .cursorrules (appended)
@@ -126,70 +92,6 @@ impl CursorAdapter {
         Ok(())
     }
 
-    /// Apply commands: commands/*.md → .cursor/commands/
-    fn apply_commands(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let commands_dir = self.cursor_dir().join("commands");
-        fs::create_dir_all(&commands_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "commands");
-            let target_path = commands_dir.join(&filename);
-            let display_path = format!(".cursor/commands/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply MCP configs: mcp/*.json → .cursor/mcp.json (mcpServers section)
-    fn apply_mcp(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let mcp_file = self.cursor_dir().join("mcp.json");
-
-        // Read existing or create new
-        let mut mcp_config: serde_json::Value = if mcp_file.exists() {
-            let content = fs::read_to_string(&mcp_file)?;
-            serde_json::from_str(&content)?
-        } else {
-            serde_json::json!({})
-        };
-
-        // Ensure mcpServers object exists
-        if mcp_config.get("mcpServers").is_none() {
-            mcp_config["mcpServers"] = serde_json::json!({});
-        }
-
-        // Merge MCP configurations
-        for file in files {
-            let server_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let server_name = strip_section_prefix(&file.relative_path, "mcp").replace(".json", "");
-            mcp_config["mcpServers"][server_name] = server_config;
-        }
-
-        let json_str = serde_json::to_string_pretty(&mcp_config)?;
-        write_with_conflict(&mcp_file, &json_str, mode, result, ".cursor/mcp.json")?;
-
-        Ok(())
-    }
-
     /// Apply hooks: hooks/*.json → .cursor/hooks.json
     fn apply_hooks(
         &self,
@@ -224,56 +126,6 @@ impl CursorAdapter {
 
         Ok(())
     }
-
-    /// Apply agents: agents/*.md → .cursor/agents/
-    fn apply_agents(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let agents_dir = self.cursor_dir().join("agents");
-        fs::create_dir_all(&agents_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "agents");
-            let target_path = agents_dir.join(&filename);
-            let display_path = format!(".cursor/agents/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply skills: skills/*.ts → .cursor/skills/
-    fn apply_skills(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let skills_dir = self.cursor_dir().join("skills");
-        fs::create_dir_all(&skills_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target_path = skills_dir.join(&filename);
-            let display_path = format!(".cursor/skills/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl ToolAdapter for CursorAdapter {
@@ -282,112 +134,81 @@ impl ToolAdapter for CursorAdapter {
     }
 
     fn detect(&self) -> bool {
-        // Check if .cursorrules file exists
-        if self.cursorrules_file().exists() {
-            return true;
-        }
-
-        // Check if .cursor directory exists
-        if self.cursor_dir().exists() {
-            return true;
-        }
-
-        // Check if cursor command exists
-        #[cfg(target_os = "windows")]
-        let check_cmd = std::process::Command::new("where").arg("cursor").output();
-
-        #[cfg(not(target_os = "windows"))]
-        let check_cmd = std::process::Command::new("which").arg("cursor").output();
-
-        check_cmd
-            .map(|output| output.status.success())
-            .unwrap_or(false)
+        self.cursorrules_file().exists()
+            || self.cursor_dir().exists()
+            || is_command_available("cursor")
     }
 
     fn scan(&self, preset_files: &PresetFiles, _target_dir: &Path) -> ScanResult {
         let mut result = ScanResult::new();
-        let cursorrules = self.cursorrules_file();
-        let mcp_file = self.cursor_dir().join("mcp.json");
+        let cursor_dir = self.cursor_dir();
+        let mcp_file = cursor_dir.join("mcp.json");
 
-        // Rules → .cursor/rules/*.md or *.mdc
-        for file in &preset_files.rules {
-            let filename = CursorAdapter::rule_target_filename(&file.relative_path, &file.content);
-            let target = format!(".cursor/rules/{}", filename);
-            let target_path = self.cursor_dir().join("rules").join(&filename);
-            result.add_change_with_content(
-                target,
-                "rules".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // Rules with frontmatter-aware filename transform
+        let rule_fn = |n: &str, c: &str| Self::rule_filename(n, c);
+        scan_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &cursor_dir.join("rules"),
+            ".cursor/rules",
+            &mut result,
+            Some(&rule_fn),
+            None,
+        );
 
         // Memory → .cursorrules (appended)
         if !preset_files.memory.is_empty() {
             result.add_change(
                 ".cursorrules".to_string(),
                 "memory".to_string(),
-                cursorrules.exists(),
+                self.cursorrules_file().exists(),
             );
         }
 
-        // Commands
-        for file in &preset_files.commands {
-            let filename = strip_section_prefix(&file.relative_path, "commands");
-            let target = format!(".cursor/commands/{}", filename);
-            let target_path = self.cursor_dir().join("commands").join(&filename);
-            result.add_change_with_content(
-                target,
-                "commands".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // 1:1 sections
+        scan_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &cursor_dir.join("commands"),
+            ".cursor/commands",
+            &mut result,
+            None,
+            None,
+        );
+        scan_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &cursor_dir.join("agents"),
+            ".cursor/agents",
+            &mut result,
+            None,
+            None,
+        );
+        scan_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &cursor_dir.join("skills"),
+            ".cursor/skills",
+            &mut result,
+            None,
+            None,
+        );
 
-        // MCP
-        if !preset_files.mcp.is_empty() {
-            result.add_change(
-                ".cursor/mcp.json".to_string(),
-                "mcp".to_string(),
-                mcp_file.exists(),
-            );
-        }
-
-        // Hooks
-        if !preset_files.hooks.is_empty() {
-            let hooks_file = self.cursor_dir().join("hooks.json");
-            result.add_change(
-                ".cursor/hooks.json".to_string(),
-                "hooks".to_string(),
-                hooks_file.exists(),
-            );
-        }
-
-        // Agents
-        for file in &preset_files.agents {
-            let filename = strip_section_prefix(&file.relative_path, "agents");
-            let target = format!(".cursor/agents/{}", filename);
-            let target_path = self.cursor_dir().join("agents").join(&filename);
-            result.add_change_with_content(
-                target,
-                "agents".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
-
-        // Skills
-        for file in &preset_files.skills {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target = format!(".cursor/skills/{}", filename);
-            let target_path = self.cursor_dir().join("skills").join(&filename);
-            result.add_change_with_content(
-                target,
-                "skills".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // Merged sections
+        scan_merged_section(
+            &preset_files.mcp,
+            ".cursor/mcp.json",
+            "mcp",
+            &mcp_file,
+            &mut result,
+        );
+        scan_merged_section(
+            &preset_files.hooks,
+            ".cursor/hooks.json",
+            "hooks",
+            &cursor_dir.join("hooks.json"),
+            &mut result,
+        );
 
         result
     }
@@ -398,19 +219,67 @@ impl ToolAdapter for CursorAdapter {
         _target_dir: &Path,
         conflict_mode: &mut ConflictMode,
     ) -> Result<ApplyResult> {
-        self.ensure_cursor_dir()?;
+        ensure_dir(&self.cursor_dir())?;
 
         let mut result = ApplyResult::new();
+        let cursor_dir = self.cursor_dir();
 
         // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
-        self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
+        apply_json_merge(
+            &preset_files.mcp,
+            "mcp",
+            &cursor_dir.join("mcp.json"),
+            ".cursor/mcp.json",
+            "mcpServers",
+            serde_json::json!({}),
+            &mut result,
+            conflict_mode,
+        )?;
         self.apply_hooks(&preset_files.hooks, &mut result, conflict_mode)?;
+
         // 1:1 mapped sections (resolved immediately from PreResolved map)
-        self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
-        self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
-        self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
-        self.apply_skills(&preset_files.skills, &mut result, conflict_mode)?;
+        let rule_fn = |n: &str, c: &str| Self::rule_filename(n, c);
+        apply_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &cursor_dir.join("rules"),
+            ".cursor/rules",
+            &mut result,
+            conflict_mode,
+            Some(&rule_fn),
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &cursor_dir.join("commands"),
+            ".cursor/commands",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &cursor_dir.join("agents"),
+            ".cursor/agents",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
+        apply_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &cursor_dir.join("skills"),
+            ".cursor/skills",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
 
         Ok(result)
     }

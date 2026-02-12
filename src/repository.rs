@@ -9,6 +9,7 @@ pub fn is_git_url(source: &str) -> bool {
         || source.starts_with("https://")
         || source.starts_with("git@")
         || source.starts_with("ssh://")
+        || source.starts_with("git://")
 }
 
 /// Resolve a repository source to a local path
@@ -88,6 +89,7 @@ mod tests {
         assert!(is_git_url("http://github.com/user/repo"));
         assert!(is_git_url("git@github.com:user/repo.git"));
         assert!(is_git_url("ssh://git@github.com/user/repo"));
+        assert!(is_git_url("git://github.com/user/repo"));
         assert!(!is_git_url("./local/path"));
         assert!(!is_git_url("repo-name"));
     }

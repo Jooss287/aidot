@@ -1,4 +1,5 @@
-use crate::adapters::traits::{ApplyResult, ConflictDecision, PendingChange};
+use crate::adapters::conflict::ConflictDecision;
+use crate::adapters::traits::{ApplyResult, PendingChange};
 use crate::adapters::{
     all_tools, detect_tools, normalize_content, write_with_conflict, ConflictMode,
 };

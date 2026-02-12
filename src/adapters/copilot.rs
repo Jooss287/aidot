@@ -1,7 +1,9 @@
-use super::traits::{
-    add_suffix_before_ext, convert_frontmatter_key, strip_section_prefix, write_with_conflict,
-    ApplyResult, ConflictMode, PresetFile, PresetFiles, ScanResult, ToolAdapter,
+use super::common::{
+    apply_json_merge, apply_one_to_one, ensure_dir, scan_merged_section, scan_one_to_one,
 };
+use super::conflict::{write_with_conflict, ConflictMode};
+use super::helpers::{add_suffix_before_ext, convert_frontmatter_key, strip_section_prefix};
+use super::traits::{ApplyResult, PresetFile, PresetFiles, ScanResult, ToolAdapter};
 use crate::error::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,51 +41,6 @@ impl CopilotAdapter {
     /// Get the copilot-instructions.md file path
     fn copilot_instructions_file(&self) -> PathBuf {
         self.github_dir().join("copilot-instructions.md")
-    }
-
-    /// Ensure .github directory exists
-    fn ensure_github_dir(&self) -> Result<()> {
-        let github_dir = self.github_dir();
-        if !github_dir.exists() {
-            fs::create_dir_all(&github_dir)?;
-        }
-        Ok(())
-    }
-
-    /// Ensure .vscode directory exists
-    fn ensure_vscode_dir(&self) -> Result<()> {
-        let vscode_dir = self.vscode_dir();
-        if !vscode_dir.exists() {
-            fs::create_dir_all(&vscode_dir)?;
-        }
-        Ok(())
-    }
-
-    /// Apply rules files: rules/*.md → .github/instructions/*.instructions.md
-    fn apply_rules(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let instructions_dir = self.github_dir().join("instructions");
-        fs::create_dir_all(&instructions_dir)?;
-
-        for file in files {
-            let name = strip_section_prefix(&file.relative_path, "rules");
-            let filename = add_suffix_before_ext(&name, "instructions");
-            let target_path = instructions_dir.join(&filename);
-            let display_path = format!(".github/instructions/{}", filename);
-
-            let content = convert_frontmatter_key(&file.content, "globs", "applyTo");
-            write_with_conflict(&target_path, &content, mode, result, &display_path)?;
-        }
-
-        Ok(())
     }
 
     /// Apply memory files: memory/*.md → .github/copilot-instructions.md (appended)
@@ -130,126 +87,6 @@ impl CopilotAdapter {
 
         Ok(())
     }
-
-    /// Apply commands: commands/*.md → .github/prompts/*.prompt.md
-    fn apply_commands(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let prompts_dir = self.github_dir().join("prompts");
-        fs::create_dir_all(&prompts_dir)?;
-
-        for file in files {
-            let name = strip_section_prefix(&file.relative_path, "commands");
-            let filename = add_suffix_before_ext(&name, "prompt");
-            let target_path = prompts_dir.join(&filename);
-            let display_path = format!(".github/prompts/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply MCP configs: mcp/*.json → .vscode/mcp.json
-    fn apply_mcp(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        self.ensure_vscode_dir()?;
-        let mcp_file = self.vscode_dir().join("mcp.json");
-
-        // Read existing or create new
-        let mut mcp_config: serde_json::Value = if mcp_file.exists() {
-            let content = fs::read_to_string(&mcp_file)?;
-            serde_json::from_str(&content)?
-        } else {
-            serde_json::json!({
-                "inputs": [],
-                "servers": {}
-            })
-        };
-
-        // Ensure servers object exists
-        if mcp_config.get("servers").is_none() {
-            mcp_config["servers"] = serde_json::json!({});
-        }
-
-        // Merge MCP configurations
-        for file in files {
-            let server_config: serde_json::Value = serde_json::from_str(&file.content)?;
-            let server_name = strip_section_prefix(&file.relative_path, "mcp").replace(".json", "");
-            mcp_config["servers"][server_name] = server_config;
-        }
-
-        let json_str = serde_json::to_string_pretty(&mcp_config)?;
-        write_with_conflict(&mcp_file, &json_str, mode, result, ".vscode/mcp.json")?;
-
-        Ok(())
-    }
-
-    /// Apply agents: agents/*.md → .github/agents/*.agent.md
-    fn apply_agents(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let agents_dir = self.github_dir().join("agents");
-        fs::create_dir_all(&agents_dir)?;
-
-        for file in files {
-            let name = strip_section_prefix(&file.relative_path, "agents");
-            let filename = add_suffix_before_ext(&name, "agent");
-            let target_path = agents_dir.join(&filename);
-            let display_path = format!(".github/agents/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply skills: skills/*.ts → .github/skills/
-    fn apply_skills(
-        &self,
-        files: &[PresetFile],
-        result: &mut ApplyResult,
-        mode: &mut ConflictMode,
-    ) -> Result<()> {
-        if files.is_empty() {
-            return Ok(());
-        }
-
-        let skills_dir = self.github_dir().join("skills");
-        fs::create_dir_all(&skills_dir)?;
-
-        for file in files {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target_path = skills_dir.join(&filename);
-            let display_path = format!(".github/skills/{}", filename);
-
-            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl ToolAdapter for CopilotAdapter {
@@ -258,103 +95,81 @@ impl ToolAdapter for CopilotAdapter {
     }
 
     fn detect(&self) -> bool {
-        // Check if .github/copilot-instructions.md exists
-        if self.copilot_instructions_file().exists() {
-            return true;
-        }
-
-        // Check if .github/instructions/ directory exists
-        let instructions_dir = self.github_dir().join("instructions");
-        if instructions_dir.exists() {
-            return true;
-        }
-
-        // Check if .github directory exists (likely a GitHub project)
-        if self.github_dir().exists() {
-            return true;
-        }
-
-        // Check if .vscode directory exists (VS Code project, might use Copilot)
-        if self.vscode_dir().exists() {
-            return true;
-        }
-
-        false
+        self.copilot_instructions_file().exists()
+            || self.github_dir().join("instructions").exists()
+            || self.github_dir().exists()
+            || self.vscode_dir().exists()
     }
 
     fn scan(&self, preset_files: &PresetFiles, _target_dir: &Path) -> ScanResult {
         let mut result = ScanResult::new();
-        let instructions_file = self.copilot_instructions_file();
-        let mcp_file = self.vscode_dir().join("mcp.json");
+        let github_dir = self.github_dir();
 
-        // Rules → .github/instructions/*.instructions.md
-        for file in &preset_files.rules {
-            let name = strip_section_prefix(&file.relative_path, "rules");
-            let filename = add_suffix_before_ext(&name, "instructions");
-            let target = format!(".github/instructions/{}", filename);
-            let target_path = self.github_dir().join("instructions").join(&filename);
-            let content = convert_frontmatter_key(&file.content, "globs", "applyTo");
-            result.add_change_with_content(target, "rules".to_string(), &target_path, &content);
-        }
+        // Rules with filename and content transforms
+        let rule_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "instructions");
+        let rule_content_fn = |content: &str| convert_frontmatter_key(content, "globs", "applyTo");
+        scan_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &github_dir.join("instructions"),
+            ".github/instructions",
+            &mut result,
+            Some(&rule_fn),
+            Some(&rule_content_fn),
+        );
 
         // Memory → .github/copilot-instructions.md (appended)
         if !preset_files.memory.is_empty() {
             result.add_change(
                 ".github/copilot-instructions.md".to_string(),
                 "memory".to_string(),
-                instructions_file.exists(),
+                self.copilot_instructions_file().exists(),
             );
         }
 
-        // Commands → .github/prompts/*.prompt.md
-        for file in &preset_files.commands {
-            let name = strip_section_prefix(&file.relative_path, "commands");
-            let filename = add_suffix_before_ext(&name, "prompt");
-            let target = format!(".github/prompts/{}", filename);
-            let target_path = self.github_dir().join("prompts").join(&filename);
-            result.add_change_with_content(
-                target,
-                "commands".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // Commands with prompt suffix
+        let cmd_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "prompt");
+        scan_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &github_dir.join("prompts"),
+            ".github/prompts",
+            &mut result,
+            Some(&cmd_fn),
+            None,
+        );
 
         // MCP → .vscode/mcp.json
-        if !preset_files.mcp.is_empty() {
-            result.add_change(
-                ".vscode/mcp.json".to_string(),
-                "mcp".to_string(),
-                mcp_file.exists(),
-            );
-        }
+        scan_merged_section(
+            &preset_files.mcp,
+            ".vscode/mcp.json",
+            "mcp",
+            &self.vscode_dir().join("mcp.json"),
+            &mut result,
+        );
 
-        // Agents → .github/agents/*.agent.md
-        for file in &preset_files.agents {
-            let name = strip_section_prefix(&file.relative_path, "agents");
-            let filename = add_suffix_before_ext(&name, "agent");
-            let target = format!(".github/agents/{}", filename);
-            let target_path = self.github_dir().join("agents").join(&filename);
-            result.add_change_with_content(
-                target,
-                "agents".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // Agents with agent suffix
+        let agent_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "agent");
+        scan_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &github_dir.join("agents"),
+            ".github/agents",
+            &mut result,
+            Some(&agent_fn),
+            None,
+        );
 
-        // Skills → .github/skills/
-        for file in &preset_files.skills {
-            let filename = strip_section_prefix(&file.relative_path, "skills");
-            let target = format!(".github/skills/{}", filename);
-            let target_path = self.github_dir().join("skills").join(&filename);
-            result.add_change_with_content(
-                target,
-                "skills".to_string(),
-                &target_path,
-                &file.content,
-            );
-        }
+        // Skills (no transform)
+        scan_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &github_dir.join("skills"),
+            ".github/skills",
+            &mut result,
+            None,
+            None,
+        );
 
         result
     }
@@ -365,18 +180,72 @@ impl ToolAdapter for CopilotAdapter {
         _target_dir: &Path,
         conflict_mode: &mut ConflictMode,
     ) -> Result<ApplyResult> {
-        self.ensure_github_dir()?;
+        ensure_dir(&self.github_dir())?;
 
         let mut result = ApplyResult::new();
+        let github_dir = self.github_dir();
 
         // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
-        self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
+        apply_json_merge(
+            &preset_files.mcp,
+            "mcp",
+            &self.vscode_dir().join("mcp.json"),
+            ".vscode/mcp.json",
+            "servers",
+            serde_json::json!({"inputs": [], "servers": {}}),
+            &mut result,
+            conflict_mode,
+        )?;
+
         // 1:1 mapped sections (resolved immediately from PreResolved map)
-        self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
-        self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
-        self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
-        self.apply_skills(&preset_files.skills, &mut result, conflict_mode)?;
+        let rule_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "instructions");
+        let rule_content_fn = |content: &str| convert_frontmatter_key(content, "globs", "applyTo");
+        apply_one_to_one(
+            &preset_files.rules,
+            "rules",
+            &github_dir.join("instructions"),
+            ".github/instructions",
+            &mut result,
+            conflict_mode,
+            Some(&rule_fn),
+            Some(&rule_content_fn),
+        )?;
+
+        let cmd_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "prompt");
+        apply_one_to_one(
+            &preset_files.commands,
+            "commands",
+            &github_dir.join("prompts"),
+            ".github/prompts",
+            &mut result,
+            conflict_mode,
+            Some(&cmd_fn),
+            None,
+        )?;
+
+        let agent_fn = |name: &str, _content: &str| add_suffix_before_ext(name, "agent");
+        apply_one_to_one(
+            &preset_files.agents,
+            "agents",
+            &github_dir.join("agents"),
+            ".github/agents",
+            &mut result,
+            conflict_mode,
+            Some(&agent_fn),
+            None,
+        )?;
+
+        apply_one_to_one(
+            &preset_files.skills,
+            "skills",
+            &github_dir.join("skills"),
+            ".github/skills",
+            &mut result,
+            conflict_mode,
+            None,
+            None,
+        )?;
 
         Ok(result)
     }
