@@ -369,10 +369,10 @@ impl ToolAdapter for CopilotAdapter {
 
         let mut result = ApplyResult::new();
 
-        // 머지 섹션 먼저 (interactive 프롬프트 발생 가능)
+        // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
         self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
-        // 1:1 매핑 섹션 (PreResolved map에서 즉시 처리)
+        // 1:1 mapped sections (resolved immediately from PreResolved map)
         self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
         self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
         self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
@@ -482,7 +482,7 @@ mod tests {
             .join(".github/instructions/rust.instructions.md");
         let content = fs::read_to_string(file).unwrap();
 
-        // globs → applyTo 변환 확인
+        // Verify globs -> applyTo conversion
         assert!(content.contains("applyTo:"));
         assert!(!content.contains("globs:"));
         assert!(content.contains("# Rust Rules"));
@@ -549,7 +549,7 @@ mod tests {
     fn test_apply_rules_existing() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        // 기존 파일 생성
+        // Create existing file
         let instructions_dir = temp_dir.path().join(".github/instructions");
         fs::create_dir_all(&instructions_dir).unwrap();
         fs::write(
@@ -617,7 +617,7 @@ mod tests {
 
         assert!(result.has_changes());
         assert!(!result.has_conflicts());
-        // scan 결과가 .github/instructions/ 경로를 사용하는지 확인
+        // Verify scan results use .github/instructions/ path
         assert_eq!(
             result.changes[0].path,
             ".github/instructions/test.instructions.md"
@@ -628,7 +628,7 @@ mod tests {
     fn test_scan_conflicts() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        // .github/instructions/ 에 기존 파일 생성
+        // Create existing file in .github/instructions/
         let instructions_dir = temp_dir.path().join(".github/instructions");
         fs::create_dir_all(&instructions_dir).unwrap();
         fs::write(instructions_dir.join("new.instructions.md"), "existing").unwrap();

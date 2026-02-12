@@ -26,7 +26,7 @@ pub fn has_frontmatter(content: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// 프리셋 파일의 상대경로에서 섹션 접두사를 제거
+/// Strip section prefix from a preset file's relative path
 ///
 /// # Examples
 /// ```
@@ -39,9 +39,9 @@ pub fn strip_section_prefix(relative_path: &str, section: &str) -> String {
         .replace(&format!("{}\\", section), "")
 }
 
-/// 파일명의 `.md` 확장자 앞에 접미사를 삽입
+/// Insert a suffix before the `.md` extension in a filename
 ///
-/// `.md` 확장자가 없는 경우에도 `{filename}.{suffix}.md` 형식으로 반환.
+/// Returns `{filename}.{suffix}.md` even when the `.md` extension is absent.
 ///
 /// # Examples
 /// ```
@@ -57,10 +57,10 @@ pub fn add_suffix_before_ext(filename: &str, suffix: &str) -> String {
     }
 }
 
-/// YAML 프론트매터 내 특정 키를 다른 키로 변환
+/// Convert a specific key to another key within YAML front matter
 ///
-/// 프론트매터가 없으면 원본을 그대로 반환.
-/// `from_key:` 또는 `from_key :` 형태를 모두 처리.
+/// Returns the original content unchanged if no front matter exists.
+/// Handles both `from_key:` and `from_key :` forms.
 ///
 /// # Examples
 /// ```
@@ -130,8 +130,8 @@ pub enum ConflictMode {
     #[default]
     Ask,
     /// Pre-resolved decisions (display_path → should_write)
-    /// interact 선택 시 사전에 모든 충돌을 해결한 결과
-    /// fallback_all: 사전 결정에 없는 파일의 기본 동작 (None=inline 프롬프트, Some(true)=overwrite, Some(false)=skip)
+    /// Results from pre-resolving all conflicts when interactive mode is chosen
+    /// fallback_all: default behavior for files not in the decision map (None=inline prompt, Some(true)=overwrite, Some(false)=skip)
     PreResolved {
         decisions: HashMap<String, bool>,
         fallback_all: Option<bool>,
@@ -174,9 +174,9 @@ impl ConflictMode {
                 match decisions.get(file_path).copied() {
                     Some(should_write) => should_write,
                     None => match *fallback_all {
-                        // OverwriteAll/SkipAll이 이전에 선택된 경우
+                        // Previously selected OverwriteAll/SkipAll
                         Some(should_write) => should_write,
-                        // 머지 파일 등 사전 해결 불가한 파일: inline으로 처리
+                        // Files that can't be pre-resolved (e.g., merged files): handle inline
                         None => {
                             let diff_available =
                                 existing_content.is_some() && new_content.is_some();
@@ -211,7 +211,7 @@ impl ConflictMode {
             }
             ConflictMode::Ask => {
                 let diff_available = existing_content.is_some() && new_content.is_some();
-                // diff가 가능하면 자동으로 먼저 보여줌
+                // Auto-show diff first if available
                 if let (Some(existing), Some(new)) = (existing_content, new_content) {
                     Self::print_diff(file_path, existing, new);
                 }
@@ -746,13 +746,13 @@ mod tests {
 
     #[test]
     fn test_has_frontmatter_invalid() {
-        // 프론트매터 없음
+        // No front matter
         assert!(!has_frontmatter("# Just a heading"));
-        // --- 로 시작하지만 닫는 --- 없음
+        // Starts with --- but no closing ---
         assert!(!has_frontmatter("---\ntitle: test\n# Content"));
-        // 빈 문자열
+        // Empty string
         assert!(!has_frontmatter(""));
-        // --- 바로 뒤에 줄바꿈 없음
+        // No newline immediately after ---
         assert!(!has_frontmatter("---title: test\n---\n# Content"));
     }
 
@@ -834,7 +834,7 @@ mod tests {
     fn test_convert_frontmatter_key_missing_key() {
         let input = "---\ndescription: test\n---\n# Content";
         let result = convert_frontmatter_key(input, "globs", "applyTo");
-        // globs 키가 없으므로 변환 없이 유지
+        // No globs key, so content remains unchanged
         assert!(result.contains("description: test"));
         assert!(!result.contains("applyTo"));
     }
@@ -874,10 +874,10 @@ mod tests {
             fallback_all: None,
         };
 
-        // 사전 결정된 결과 조회
+        // Look up pre-resolved decisions
         assert!(mode.resolve_conflict("file1.md", None, None));
         assert!(!mode.resolve_conflict("file2.md", None, None));
-        // 결정 맵에 없는 파일은 inline Ask fallback으로 처리됨
-        // (stdin이 필요하므로 단위 테스트에서는 검증하지 않음)
+        // Files not in the decision map fall back to inline Ask
+        // (Cannot test in unit tests as it requires stdin)
     }
 }

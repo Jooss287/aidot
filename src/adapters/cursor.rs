@@ -51,7 +51,7 @@ impl CursorAdapter {
     fn rule_target_filename(relative_path: &str, content: &str) -> String {
         let filename = strip_section_prefix(relative_path, "rules");
         if has_frontmatter(content) {
-            // 프론트매터가 있으면 .md → .mdc 로 변경
+            // If front matter exists, convert .md to .mdc
             if let Some(stem) = filename.strip_suffix(".md") {
                 format!("{}.mdc", stem)
             } else {
@@ -402,11 +402,11 @@ impl ToolAdapter for CursorAdapter {
 
         let mut result = ApplyResult::new();
 
-        // 머지 섹션 먼저 (interactive 프롬프트 발생 가능)
+        // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
         self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
         self.apply_hooks(&preset_files.hooks, &mut result, conflict_mode)?;
-        // 1:1 매핑 섹션 (PreResolved map에서 즉시 처리)
+        // 1:1 mapped sections (resolved immediately from PreResolved map)
         self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
         self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
         self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
@@ -473,7 +473,7 @@ mod tests {
 
         assert!(!result.created.is_empty());
 
-        // 프론트매터 없으면 .md 확장자 유지
+        // Without front matter, keep .md extension
         let rule_file = temp_dir.path().join(".cursor/rules/code-style.md");
         assert!(rule_file.exists());
         let content = fs::read_to_string(rule_file).unwrap();
@@ -501,7 +501,7 @@ mod tests {
 
         assert!(!result.created.is_empty());
 
-        // 프론트매터 있으면 .mdc 확장자로 변경
+        // With front matter, convert to .mdc extension
         let rule_file = temp_dir.path().join(".cursor/rules/code-style.mdc");
         assert!(rule_file.exists());
         let content = fs::read_to_string(rule_file).unwrap();
@@ -532,9 +532,9 @@ mod tests {
 
         assert_eq!(result.created.len(), 2);
 
-        // plain.md → .md 유지
+        // plain.md -> keep .md
         assert!(temp_dir.path().join(".cursor/rules/plain.md").exists());
-        // with-meta.md → .mdc 변환
+        // with-meta.md -> convert to .mdc
         assert!(temp_dir.path().join(".cursor/rules/with-meta.mdc").exists());
     }
 
@@ -542,7 +542,7 @@ mod tests {
     fn test_apply_rules_existing() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        // 기존 파일 생성
+        // Create existing file
         let rules_dir = temp_dir.path().join(".cursor/rules");
         fs::create_dir_all(&rules_dir).unwrap();
         fs::write(rules_dir.join("existing.md"), "# Old Rules").unwrap();
@@ -603,7 +603,7 @@ mod tests {
 
         assert!(result.has_changes());
         assert!(!result.has_conflicts());
-        // scan 결과가 .cursor/rules/ 경로를 사용하는지 확인
+        // Verify scan results use .cursor/rules/ path
         assert!(result.changes[0].path.starts_with(".cursor/rules/"));
     }
 
@@ -622,7 +622,7 @@ mod tests {
         let result = adapter.scan(&preset_files, Path::new("."));
 
         assert!(result.has_changes());
-        // 프론트매터가 있으므로 .mdc 확장자
+        // Has front matter, so .mdc extension
         assert_eq!(result.changes[0].path, ".cursor/rules/test.mdc");
     }
 
@@ -630,7 +630,7 @@ mod tests {
     fn test_scan_conflicts() {
         let (temp_dir, adapter) = create_test_adapter();
 
-        // .cursor/rules/ 에 기존 파일 생성
+        // Create existing file in .cursor/rules/
         let rules_dir = temp_dir.path().join(".cursor/rules");
         fs::create_dir_all(&rules_dir).unwrap();
         fs::write(rules_dir.join("new.md"), "existing").unwrap();

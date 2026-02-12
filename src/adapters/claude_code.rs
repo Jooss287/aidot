@@ -409,12 +409,12 @@ impl ToolAdapter for ClaudeCodeAdapter {
 
         let mut result = ApplyResult::new();
 
-        // 머지 섹션 먼저 (interactive 프롬프트 발생 가능)
+        // Apply merged sections first (may trigger interactive prompts)
         self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
         self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
         self.apply_hooks(&preset_files.hooks, &mut result, conflict_mode)?;
         self.apply_settings(&preset_files.settings, &mut result, conflict_mode)?;
-        // 1:1 매핑 섹션 (PreResolved map에서 즉시 처리)
+        // 1:1 mapped sections (resolved immediately from PreResolved map)
         self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
         self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
         self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
