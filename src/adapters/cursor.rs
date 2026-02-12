@@ -81,7 +81,7 @@ impl CursorAdapter {
             let target_path = rules_dir.join(&filename);
             let display_path = format!(".cursor/rules/{}", filename);
 
-            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
+            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
         }
 
         Ok(())
@@ -121,7 +121,7 @@ impl CursorAdapter {
         };
         let content = format!("{}{}", base, memory_content);
 
-        *mode = write_with_conflict(&cursorrules, &content, *mode, result, ".cursorrules")?;
+        write_with_conflict(&cursorrules, &content, mode, result, ".cursorrules")?;
 
         Ok(())
     }
@@ -145,7 +145,7 @@ impl CursorAdapter {
             let target_path = commands_dir.join(&filename);
             let display_path = format!(".cursor/commands/{}", filename);
 
-            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
+            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
         }
 
         Ok(())
@@ -185,7 +185,7 @@ impl CursorAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&mcp_config)?;
-        *mode = write_with_conflict(&mcp_file, &json_str, *mode, result, ".cursor/mcp.json")?;
+        write_with_conflict(&mcp_file, &json_str, mode, result, ".cursor/mcp.json")?;
 
         Ok(())
     }
@@ -220,7 +220,7 @@ impl CursorAdapter {
         }
 
         let json_str = serde_json::to_string_pretty(&hooks_config)?;
-        *mode = write_with_conflict(&hooks_file, &json_str, *mode, result, ".cursor/hooks.json")?;
+        write_with_conflict(&hooks_file, &json_str, mode, result, ".cursor/hooks.json")?;
 
         Ok(())
     }
@@ -244,7 +244,7 @@ impl CursorAdapter {
             let target_path = agents_dir.join(&filename);
             let display_path = format!(".cursor/agents/{}", filename);
 
-            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
+            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
         }
 
         Ok(())
@@ -269,7 +269,7 @@ impl CursorAdapter {
             let target_path = skills_dir.join(&filename);
             let display_path = format!(".cursor/skills/{}", filename);
 
-            *mode = write_with_conflict(&target_path, &file.content, *mode, result, &display_path)?;
+            write_with_conflict(&target_path, &file.content, mode, result, &display_path)?;
         }
 
         Ok(())
@@ -396,21 +396,21 @@ impl ToolAdapter for CursorAdapter {
         &self,
         preset_files: &PresetFiles,
         _target_dir: &Path,
-        conflict_mode: ConflictMode,
+        conflict_mode: &mut ConflictMode,
     ) -> Result<ApplyResult> {
         self.ensure_cursor_dir()?;
 
         let mut result = ApplyResult::new();
-        let mut mode = conflict_mode;
 
-        // Apply each section
-        self.apply_rules(&preset_files.rules, &mut result, &mut mode)?;
-        self.apply_memory(&preset_files.memory, &mut result, &mut mode)?;
-        self.apply_commands(&preset_files.commands, &mut result, &mut mode)?;
-        self.apply_mcp(&preset_files.mcp, &mut result, &mut mode)?;
-        self.apply_hooks(&preset_files.hooks, &mut result, &mut mode)?;
-        self.apply_agents(&preset_files.agents, &mut result, &mut mode)?;
-        self.apply_skills(&preset_files.skills, &mut result, &mut mode)?;
+        // 머지 섹션 먼저 (interactive 프롬프트 발생 가능)
+        self.apply_memory(&preset_files.memory, &mut result, conflict_mode)?;
+        self.apply_mcp(&preset_files.mcp, &mut result, conflict_mode)?;
+        self.apply_hooks(&preset_files.hooks, &mut result, conflict_mode)?;
+        // 1:1 매핑 섹션 (PreResolved map에서 즉시 처리)
+        self.apply_rules(&preset_files.rules, &mut result, conflict_mode)?;
+        self.apply_commands(&preset_files.commands, &mut result, conflict_mode)?;
+        self.apply_agents(&preset_files.agents, &mut result, conflict_mode)?;
+        self.apply_skills(&preset_files.skills, &mut result, conflict_mode)?;
 
         Ok(result)
     }
@@ -468,7 +468,7 @@ mod tests {
         };
 
         let result = adapter
-            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .apply(&preset_files, temp_dir.path(), &mut ConflictMode::Force)
             .unwrap();
 
         assert!(!result.created.is_empty());
@@ -496,7 +496,7 @@ mod tests {
         };
 
         let result = adapter
-            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .apply(&preset_files, temp_dir.path(), &mut ConflictMode::Force)
             .unwrap();
 
         assert!(!result.created.is_empty());
@@ -527,7 +527,7 @@ mod tests {
         };
 
         let result = adapter
-            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .apply(&preset_files, temp_dir.path(), &mut ConflictMode::Force)
             .unwrap();
 
         assert_eq!(result.created.len(), 2);
@@ -556,7 +556,7 @@ mod tests {
         };
 
         let result = adapter
-            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .apply(&preset_files, temp_dir.path(), &mut ConflictMode::Force)
             .unwrap();
 
         assert!(result
@@ -578,7 +578,7 @@ mod tests {
         };
 
         let result = adapter
-            .apply(&preset_files, temp_dir.path(), ConflictMode::Force)
+            .apply(&preset_files, temp_dir.path(), &mut ConflictMode::Force)
             .unwrap();
 
         assert!(result.created.iter().any(|f| f.contains("test.md")));

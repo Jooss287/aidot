@@ -1,4 +1,5 @@
 use crate::error::Result;
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Check if content starts with YAML front matter (---\n...\n---)
@@ -119,7 +120,7 @@ pub struct PresetFile {
 }
 
 /// How to handle file conflicts during apply
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ConflictMode {
     /// Overwrite existing files without asking
     Force,
@@ -128,6 +129,13 @@ pub enum ConflictMode {
     /// Ask user for each conflict (default)
     #[default]
     Ask,
+    /// Pre-resolved decisions (display_path → should_write)
+    /// interact 선택 시 사전에 모든 충돌을 해결한 결과
+    /// fallback_all: 사전 결정에 없는 파일의 기본 동작 (None=inline 프롬프트, Some(true)=overwrite, Some(false)=skip)
+    PreResolved {
+        decisions: HashMap<String, bool>,
+        fallback_all: Option<bool>,
+    },
 }
 
 /// User's decision for a single conflict
@@ -147,27 +155,79 @@ pub enum ConflictDecision {
 
 impl ConflictMode {
     /// Resolve how to handle a conflict for a specific file.
-    /// Returns (should_write, updated_mode) where updated_mode may change to Force/Skip
-    /// if user chose "all" option.
+    /// Returns whether the file should be written.
+    /// May mutate self (e.g., Ask → Force when user chooses "Overwrite All").
     /// `existing_content` and `new_content` enable diff display in interactive mode.
     pub fn resolve_conflict(
-        &self,
+        &mut self,
         file_path: &str,
         existing_content: Option<&str>,
         new_content: Option<&str>,
-    ) -> (bool, ConflictMode) {
+    ) -> bool {
         match self {
-            ConflictMode::Force => (true, ConflictMode::Force),
-            ConflictMode::Skip => (false, ConflictMode::Skip),
+            ConflictMode::Force => true,
+            ConflictMode::Skip => false,
+            ConflictMode::PreResolved {
+                decisions,
+                fallback_all,
+            } => {
+                match decisions.get(file_path).copied() {
+                    Some(should_write) => should_write,
+                    None => match *fallback_all {
+                        // OverwriteAll/SkipAll이 이전에 선택된 경우
+                        Some(should_write) => should_write,
+                        // 머지 파일 등 사전 해결 불가한 파일: inline으로 처리
+                        None => {
+                            let diff_available =
+                                existing_content.is_some() && new_content.is_some();
+                            if let (Some(existing), Some(new)) = (existing_content, new_content) {
+                                Self::print_diff(file_path, existing, new);
+                            }
+                            loop {
+                                let decision = Self::ask_user(file_path, diff_available);
+                                match decision {
+                                    ConflictDecision::Overwrite => return true,
+                                    ConflictDecision::Skip => return false,
+                                    ConflictDecision::OverwriteAll => {
+                                        *fallback_all = Some(true);
+                                        return true;
+                                    }
+                                    ConflictDecision::SkipAll => {
+                                        *fallback_all = Some(false);
+                                        return false;
+                                    }
+                                    ConflictDecision::ShowDiff => {
+                                        if let (Some(existing), Some(new)) =
+                                            (existing_content, new_content)
+                                        {
+                                            Self::print_diff(file_path, existing, new);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
             ConflictMode::Ask => {
                 let diff_available = existing_content.is_some() && new_content.is_some();
+                // diff가 가능하면 자동으로 먼저 보여줌
+                if let (Some(existing), Some(new)) = (existing_content, new_content) {
+                    Self::print_diff(file_path, existing, new);
+                }
                 loop {
                     let decision = Self::ask_user(file_path, diff_available);
                     match decision {
-                        ConflictDecision::Overwrite => return (true, ConflictMode::Ask),
-                        ConflictDecision::Skip => return (false, ConflictMode::Ask),
-                        ConflictDecision::OverwriteAll => return (true, ConflictMode::Force),
-                        ConflictDecision::SkipAll => return (false, ConflictMode::Skip),
+                        ConflictDecision::Overwrite => return true,
+                        ConflictDecision::Skip => return false,
+                        ConflictDecision::OverwriteAll => {
+                            *self = ConflictMode::Force;
+                            return true;
+                        }
+                        ConflictDecision::SkipAll => {
+                            *self = ConflictMode::Skip;
+                            return false;
+                        }
                         ConflictDecision::ShowDiff => {
                             if let (Some(existing), Some(new)) = (existing_content, new_content) {
                                 Self::print_diff(file_path, existing, new);
@@ -181,7 +241,7 @@ impl ConflictMode {
     }
 
     /// Ask user what to do with a conflicting file
-    fn ask_user(file_path: &str, diff_available: bool) -> ConflictDecision {
+    pub fn ask_user(file_path: &str, diff_available: bool) -> ConflictDecision {
         use colored::Colorize;
         use std::io::{self, Write};
 
@@ -228,7 +288,7 @@ impl ConflictMode {
     }
 
     /// Print unified diff between local and preset content
-    fn print_diff(file_path: &str, existing: &str, new: &str) {
+    pub fn print_diff(file_path: &str, existing: &str, new: &str) {
         use colored::Colorize;
         use similar::{ChangeTag, TextDiff};
 
@@ -261,14 +321,14 @@ impl ConflictMode {
 }
 
 /// Helper to write a file with conflict resolution
-/// Returns updated ConflictMode (may change if user chose "all" option)
+/// Mutates `mode` in place (e.g., Ask → Force when user chooses "Overwrite All")
 pub fn write_with_conflict(
     target_path: &Path,
     content: &str,
-    mode: ConflictMode,
+    mode: &mut ConflictMode,
     result: &mut ApplyResult,
     display_path: &str,
-) -> std::io::Result<ConflictMode> {
+) -> std::io::Result<()> {
     use std::fs;
 
     if target_path.exists() {
@@ -279,11 +339,11 @@ pub fn write_with_conflict(
         if let Some(ref existing) = existing_content {
             if normalize_content(existing) == normalize_content(content) {
                 result.add_unchanged(display_path.to_string());
-                return Ok(mode);
+                return Ok(());
             }
         }
 
-        let (should_write, new_mode) =
+        let should_write =
             mode.resolve_conflict(display_path, existing_content.as_deref(), Some(content));
         if should_write {
             fs::write(target_path, content)?;
@@ -291,7 +351,7 @@ pub fn write_with_conflict(
         } else {
             result.add_skipped(display_path.to_string());
         }
-        Ok(new_mode)
+        Ok(())
     } else {
         // Create parent directories if needed
         if let Some(parent) = target_path.parent() {
@@ -299,7 +359,7 @@ pub fn write_with_conflict(
         }
         fs::write(target_path, content)?;
         result.add_created(display_path.to_string());
-        Ok(mode)
+        Ok(())
     }
 }
 
@@ -329,7 +389,7 @@ pub trait ToolAdapter {
         &self,
         preset_files: &PresetFiles,
         target_dir: &Path,
-        conflict_mode: ConflictMode,
+        conflict_mode: &mut ConflictMode,
     ) -> Result<ApplyResult>;
 }
 
@@ -358,6 +418,8 @@ pub struct PendingChange {
     pub is_conflict: bool,
     /// Whether the file exists AND content is identical (normalized comparison)
     pub is_identical: bool,
+    /// Preset content for diff display (None for merged files like memory/mcp)
+    pub preset_content: Option<String>,
 }
 
 /// Result of scanning for changes
@@ -379,6 +441,7 @@ impl ScanResult {
             section,
             is_conflict,
             is_identical: false,
+            preset_content: None,
         });
     }
 
@@ -400,6 +463,7 @@ impl ScanResult {
                 section,
                 is_conflict: true,
                 is_identical,
+                preset_content: Some(preset_content.to_string()),
             });
         } else {
             self.changes.push(PendingChange {
@@ -407,6 +471,7 @@ impl ScanResult {
                 section,
                 is_conflict: false,
                 is_identical: false,
+                preset_content: Some(preset_content.to_string()),
             });
         }
     }
@@ -599,14 +664,8 @@ mod tests {
         std::fs::write(&file_path, content).unwrap();
 
         let mut result = ApplyResult::new();
-        let mode = write_with_conflict(
-            &file_path,
-            content,
-            ConflictMode::Force,
-            &mut result,
-            "test.md",
-        )
-        .unwrap();
+        let mut mode = ConflictMode::Force;
+        write_with_conflict(&file_path, content, &mut mode, &mut result, "test.md").unwrap();
 
         // Should be unchanged, not updated
         assert_eq!(result.unchanged.len(), 1);
@@ -623,10 +682,11 @@ mod tests {
         std::fs::write(&file_path, "# Old Content\n").unwrap();
 
         let mut result = ApplyResult::new();
-        let mode = write_with_conflict(
+        let mut mode = ConflictMode::Force;
+        write_with_conflict(
             &file_path,
             "# New Content\n",
-            ConflictMode::Force,
+            &mut mode,
             &mut result,
             "test.md",
         )
@@ -650,14 +710,8 @@ mod tests {
         let file_path = temp_dir.path().join("new.md");
 
         let mut result = ApplyResult::new();
-        let mode = write_with_conflict(
-            &file_path,
-            "# New File\n",
-            ConflictMode::Force,
-            &mut result,
-            "new.md",
-        )
-        .unwrap();
+        let mut mode = ConflictMode::Force;
+        write_with_conflict(&file_path, "# New File\n", &mut mode, &mut result, "new.md").unwrap();
 
         assert_eq!(result.created.len(), 1);
         assert_eq!(mode, ConflictMode::Force);
@@ -795,17 +849,35 @@ mod tests {
 
     #[test]
     fn test_conflict_mode_force() {
-        let mode = ConflictMode::Force;
-        let (should_write, new_mode) = mode.resolve_conflict("test.md", None, None);
+        let mut mode = ConflictMode::Force;
+        let should_write = mode.resolve_conflict("test.md", None, None);
         assert!(should_write);
-        assert_eq!(new_mode, ConflictMode::Force);
+        assert_eq!(mode, ConflictMode::Force);
     }
 
     #[test]
     fn test_conflict_mode_skip() {
-        let mode = ConflictMode::Skip;
-        let (should_write, new_mode) = mode.resolve_conflict("test.md", None, None);
+        let mut mode = ConflictMode::Skip;
+        let should_write = mode.resolve_conflict("test.md", None, None);
         assert!(!should_write);
-        assert_eq!(new_mode, ConflictMode::Skip);
+        assert_eq!(mode, ConflictMode::Skip);
+    }
+
+    #[test]
+    fn test_conflict_mode_pre_resolved() {
+        let mut decisions = HashMap::new();
+        decisions.insert("file1.md".to_string(), true);
+        decisions.insert("file2.md".to_string(), false);
+
+        let mut mode = ConflictMode::PreResolved {
+            decisions,
+            fallback_all: None,
+        };
+
+        // 사전 결정된 결과 조회
+        assert!(mode.resolve_conflict("file1.md", None, None));
+        assert!(!mode.resolve_conflict("file2.md", None, None));
+        // 결정 맵에 없는 파일은 inline Ask fallback으로 처리됨
+        // (stdin이 필요하므로 단위 테스트에서는 검증하지 않음)
     }
 }

@@ -1,4 +1,4 @@
-use crate::adapters::traits::{ApplyResult, PendingChange};
+use crate::adapters::traits::{ApplyResult, ConflictDecision, PendingChange};
 use crate::adapters::{
     all_tools, detect_tools, normalize_content, write_with_conflict, ConflictMode,
 };
@@ -6,6 +6,7 @@ use crate::error::Result;
 use crate::preset::parse_preset;
 use crate::repository;
 use colored::Colorize;
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -111,6 +112,7 @@ pub fn pull_preset(
                 section: "root".to_string(),
                 is_conflict,
                 is_identical,
+                preset_content: Some(root_file.content.clone()),
             },
         ));
     }
@@ -198,7 +200,7 @@ pub fn pull_preset(
     }
 
     // Phase 4: Determine conflict mode
-    let conflict_mode = if force {
+    let mut conflict_mode = if force {
         ConflictMode::Force
     } else if skip {
         ConflictMode::Skip
@@ -210,18 +212,28 @@ pub fn pull_preset(
         ask_conflict_resolution(conflicts.len())?
     };
 
+    // Phase 4.5: Pre-resolve all conflicts when interactive mode selected
+    // interact 선택 시 모든 충돌을 먼저 해결한 후 일괄 적용
+    if matches!(conflict_mode, ConflictMode::Ask) {
+        let decisions = pre_resolve_conflicts(&conflicts, &target_dir);
+        conflict_mode = ConflictMode::PreResolved {
+            decisions,
+            fallback_all: None,
+        };
+    }
+
     // Phase 5: Apply changes
     println!("{}", "Applying...".cyan());
 
     // Apply root files first (tool-agnostic)
     if !preset_files.root.is_empty() {
-        let root_result = apply_root_files(&preset_files.root, &target_dir, conflict_mode)?;
+        let root_result = apply_root_files(&preset_files.root, &target_dir, &mut conflict_mode)?;
         print_apply_result("Root", &root_result);
     }
 
     // Apply tool-specific files
     for tool in tools {
-        let result = tool.apply(&preset_files, &target_dir, conflict_mode)?;
+        let result = tool.apply(&preset_files, &target_dir, &mut conflict_mode)?;
         print_apply_result(tool.name(), &result);
     }
 
@@ -275,24 +287,134 @@ fn print_apply_result(name: &str, result: &ApplyResult) {
 fn apply_root_files(
     root_files: &[crate::adapters::traits::PresetFile],
     target_dir: &Path,
-    conflict_mode: ConflictMode,
+    conflict_mode: &mut ConflictMode,
 ) -> Result<ApplyResult> {
     let mut result = ApplyResult::new();
-    let mut current_mode = conflict_mode;
 
     for file in root_files {
         let target_path = target_dir.join(&file.relative_path);
 
-        current_mode = write_with_conflict(
+        write_with_conflict(
             &target_path,
             &file.content,
-            current_mode,
+            conflict_mode,
             &mut result,
             &file.relative_path,
         )?;
     }
 
     Ok(result)
+}
+
+/// Pre-resolve all conflicts interactively before applying
+/// 모든 충돌 파일에 대해 diff를 보여주고 사용자 결정을 수집
+fn pre_resolve_conflicts(
+    conflicts: &[&(String, PendingChange)],
+    target_dir: &Path,
+) -> HashMap<String, bool> {
+    let mut decisions = HashMap::new();
+
+    println!("\n{}", "Resolving conflicts interactively...".cyan().bold());
+
+    // preset_content가 있는 파일만 사전 해결 (1:1 매핑 파일)
+    // 머지 파일(memory, mcp, hooks, settings)은 apply 시점에 실제 콘텐츠가 결정되므로
+    // 여기서는 건너뛰고 apply 시 inline으로 처리
+    let resolvable: Vec<_> = conflicts
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, c))| c.preset_content.is_some())
+        .collect();
+    let deferred: Vec<_> = conflicts
+        .iter()
+        .filter(|(_, c)| c.preset_content.is_none())
+        .collect();
+
+    if !deferred.is_empty() {
+        println!(
+            "  {} {} {}",
+            deferred.len().to_string().dimmed(),
+            "merged file(s) will be resolved during apply.".dimmed(),
+            "(settings, memory, mcp, hooks)".dimmed()
+        );
+    }
+
+    let resolvable_total = resolvable.len();
+    let mut ri = 0;
+
+    while ri < resolvable_total {
+        let (_orig_idx, (tool_name, change)) = resolvable[ri];
+
+        // 파일 헤더 표시 (진행률 포함)
+        println!(
+            "\n  [{}/{}] {} '{}' {}",
+            ri + 1,
+            resolvable_total,
+            "UPDATE".yellow().bold(),
+            change.path.white(),
+            format!("[{}]", tool_name).dimmed()
+        );
+
+        // 기존 파일 내용 읽기
+        let existing_path = target_dir.join(&change.path);
+        let existing_content = std::fs::read_to_string(&existing_path).ok();
+
+        // diff가 가능하면 자동으로 표시
+        if let (Some(ref existing), Some(ref preset)) = (&existing_content, &change.preset_content)
+        {
+            ConflictMode::print_diff(&change.path, existing, preset);
+        }
+
+        let diff_available = existing_content.is_some() && change.preset_content.is_some();
+
+        loop {
+            let decision = ConflictMode::ask_user(&change.path, diff_available);
+            match decision {
+                ConflictDecision::Overwrite => {
+                    decisions.insert(change.path.clone(), true);
+                    break;
+                }
+                ConflictDecision::Skip => {
+                    decisions.insert(change.path.clone(), false);
+                    break;
+                }
+                ConflictDecision::OverwriteAll => {
+                    // 현재 파일 포함 나머지 모두 overwrite (resolvable + deferred)
+                    for (_, (_, remaining)) in &resolvable[ri..] {
+                        decisions.insert(remaining.path.clone(), true);
+                    }
+                    for (_, remaining) in &deferred {
+                        decisions.insert(remaining.path.clone(), true);
+                    }
+                    ri = resolvable_total; // 루프 종료
+                    break;
+                }
+                ConflictDecision::SkipAll => {
+                    // 현재 파일 포함 나머지 모두 skip (resolvable + deferred)
+                    for (_, (_, remaining)) in &resolvable[ri..] {
+                        decisions.insert(remaining.path.clone(), false);
+                    }
+                    for (_, remaining) in &deferred {
+                        decisions.insert(remaining.path.clone(), false);
+                    }
+                    ri = resolvable_total; // 루프 종료
+                    break;
+                }
+                ConflictDecision::ShowDiff => {
+                    if let (Some(ref existing), Some(ref preset)) =
+                        (&existing_content, &change.preset_content)
+                    {
+                        ConflictMode::print_diff(&change.path, existing, preset);
+                    }
+                    // 다시 물어봄
+                }
+            }
+        }
+
+        ri += 1;
+    }
+
+    println!();
+    decisions
 }
 
 /// Ask user how to handle conflicts
