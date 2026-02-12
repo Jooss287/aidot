@@ -139,6 +139,16 @@ pub fn pull_preset(
         .collect();
     let unchanged: Vec<_> = all_changes.iter().filter(|(_, c)| c.is_identical).collect();
 
+    for (tool_name, change) in &unchanged {
+        println!(
+            "  {} {} {} {}",
+            "UNCHANGED".dimmed(),
+            change.path.dimmed(),
+            format!("({})", change.section).dimmed(),
+            format!("[{}]", tool_name).dimmed()
+        );
+    }
+
     for (tool_name, change) in &creates {
         println!(
             "  {} {} {} {}",
@@ -155,16 +165,6 @@ pub fn pull_preset(
             "UPDATE".yellow().bold(),
             change.path.white(),
             "(conflict)".red(),
-            format!("({})", change.section).dimmed(),
-            format!("[{}]", tool_name).dimmed()
-        );
-    }
-
-    for (tool_name, change) in &unchanged {
-        println!(
-            "  {} {} {} {}",
-            "UNCHANGED".dimmed(),
-            change.path.dimmed(),
             format!("({})", change.section).dimmed(),
             format!("[{}]", tool_name).dimmed()
         );
@@ -241,6 +241,20 @@ fn print_apply_result(name: &str, result: &ApplyResult) {
     if has_changes {
         println!("\n{} {}", "Applied to".cyan(), name.white().bold());
 
+        if !result.unchanged.is_empty() {
+            println!("  {}:", "Unchanged".dimmed());
+            for file in &result.unchanged {
+                println!("    {} {}", "=".dimmed(), file.dimmed());
+            }
+        }
+
+        if !result.skipped.is_empty() {
+            println!("  {}:", "Skipped".dimmed());
+            for file in &result.skipped {
+                println!("    {} {}", "-".dimmed(), file.dimmed());
+            }
+        }
+
         if !result.created.is_empty() {
             println!("  {}:", "Created".green());
             for file in &result.created {
@@ -252,20 +266,6 @@ fn print_apply_result(name: &str, result: &ApplyResult) {
             println!("  {}:", "Updated".yellow());
             for file in &result.updated {
                 println!("    {} {}", "~".yellow(), file.white());
-            }
-        }
-
-        if !result.skipped.is_empty() {
-            println!("  {}:", "Skipped".dimmed());
-            for file in &result.skipped {
-                println!("    {} {}", "-".dimmed(), file.dimmed());
-            }
-        }
-
-        if !result.unchanged.is_empty() {
-            println!("  {}:", "Unchanged".dimmed());
-            for file in &result.unchanged {
-                println!("    {} {}", "=".dimmed(), file.dimmed());
             }
         }
     }
