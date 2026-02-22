@@ -20,7 +20,7 @@ detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.)."
   aidot init                    Initialize a new preset repository
   aidot repo add common <url>   Register a preset repository
   aidot pull common             Apply preset to all detected tools
-  aidot pull common --tools cursor,claude  Apply to specific tools only
+  aidot pull common --tools cursor,claude,codex  Apply to specific tools only
   aidot detect                  Show installed LLM tools
   aidot status                  Show current configuration status")]
 pub struct Cli {
@@ -78,7 +78,8 @@ pub enum Commands {
         #[arg(value_name = "REPO")]
         repositories: Vec<String>,
 
-        /// Apply to specific tools only (comma-separated: cursor,claude,copilot)
+        /// Apply to specific tools only (comma-separated).
+        /// Available: claude, cursor, copilot, codex
         #[arg(long, value_delimiter = ',')]
         tools: Option<Vec<String>>,
 

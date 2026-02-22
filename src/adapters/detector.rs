@@ -1,4 +1,5 @@
 use super::claude_code::ClaudeCodeAdapter;
+use super::codex::CodexAdapter;
 use super::copilot::CopilotAdapter;
 use super::cursor::CursorAdapter;
 use super::ToolAdapter;
@@ -33,6 +34,12 @@ pub fn detect_tools(project_dir: &Path) -> Vec<Box<dyn ToolAdapter>> {
         tools.push(Box::new(copilot_adapter));
     }
 
+    // Check Codex CLI
+    let codex_adapter = CodexAdapter::new(project_dir);
+    if codex_adapter.detect() {
+        tools.push(Box::new(codex_adapter));
+    }
+
     tools
 }
 
@@ -44,6 +51,7 @@ pub fn all_tools(project_dir: &Path) -> Vec<Box<dyn ToolAdapter>> {
         Box::new(ClaudeCodeAdapter::new(project_dir)),
         Box::new(CursorAdapter::new(project_dir)),
         Box::new(CopilotAdapter::new(project_dir)),
+        Box::new(CodexAdapter::new(project_dir)),
     ]
 }
 
@@ -52,6 +60,8 @@ pub fn get_detected_tool_names(project_dir: &Path) -> Vec<DetectedTool> {
     let claude_adapter = ClaudeCodeAdapter::new(project_dir);
     let cursor_adapter = CursorAdapter::new(project_dir);
     let copilot_adapter = CopilotAdapter::new(project_dir);
+
+    let codex_adapter = CodexAdapter::new(project_dir);
 
     vec![
         DetectedTool {
@@ -65,6 +75,10 @@ pub fn get_detected_tool_names(project_dir: &Path) -> Vec<DetectedTool> {
         DetectedTool {
             name: "GitHub Copilot".to_string(),
             detected: copilot_adapter.detect(),
+        },
+        DetectedTool {
+            name: "Codex CLI".to_string(),
+            detected: codex_adapter.detect(),
         },
     ]
 }
