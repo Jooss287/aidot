@@ -1,6 +1,6 @@
 # aidot
 
-> Claude Code, Cursor, GitHub Copilot 등 AI 코딩 도구 설정을 하나의 프리셋으로 관리하고 동기화하는 CLI
+> Claude Code, Cursor, GitHub Copilot, Codex CLI 등 AI 코딩 도구 설정을 하나의 프리셋으로 관리하고 동기화하는 CLI
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -11,7 +11,7 @@
 
 ## 소개
 
-**aidot** (AI dotfiles)는 여러 LLM 코딩 도구(Claude Code, Cursor, GitHub Copilot 등)의 설정을 하나의 프리셋으로 통합 관리하는 CLI 도구입니다.
+**aidot** (AI dotfiles)는 여러 LLM 코딩 도구(Claude Code, Cursor, GitHub Copilot, Codex CLI 등)의 설정을 하나의 프리셋으로 통합 관리하는 CLI 도구입니다.
 
 하나의 프리셋 저장소에서 설정을 관리하고, `aidot pull` 한 번으로 감지된 모든 LLM 도구에 자동 변환하여 적용합니다.
 
@@ -250,6 +250,18 @@ directory = "settings/"
 | `agents/*.md` | `.github/agents/*.agent.md` |
 | `skills/*.ts` | `.github/skills/` |
 
+### Codex CLI
+
+| 프리셋 | 변환 결과 |
+|--------|-----------|
+| `rules/*.md` | `.codex/AGENTS.md` (memory와 병합) |
+| `memory/*.md` | `.codex/AGENTS.md` (rules와 병합) |
+| `commands/*.md` | `.codex/skills/<name>/SKILL.md` (deprecated → skills로 변환) |
+| `mcp/*.json` | `.codex/config.toml` (`[mcp_servers.*]`, JSON → TOML) |
+| `agents/*.md` | `.codex/agents/<name>.md` + `.codex/config.toml` (`[agents.*]`) |
+| `skills/**` | `.codex/skills/<name>/SKILL.md` (YAML front matter 자동 생성) |
+| `settings/*.json` | 미지원 (경고 출력 후 스킵) |
+
 ---
 
 ## 사용 예시
@@ -312,24 +324,20 @@ aidot pull  # default 저장소 자동 적용
 ## 참고 자료
 
 ### Claude Code
-- [Skills](https://code.claude.com/docs/ko/skills)
-- [Plugins](https://code.claude.com/docs/ko/plugins)
-- [Settings](https://code.claude.com/docs/ko/settings)
+- [Settings](https://code.claude.com/docs/en/settings)
+- [Skills](https://code.claude.com/docs/en/skills)
 
 ### GitHub Copilot
-- [Repository Instructions](https://docs.github.com/ko/copilot/how-tos/configure-custom-instructions/add-repository-instructions)
-- [Agent Skills](https://docs.github.com/ko/copilot/concepts/agents/about-agent-skills)
-- [MCP](https://docs.github.com/ko/copilot/concepts/context/mcp)
-- [Extend Copilot with MCP](https://docs.github.com/ko/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp)
-- [Custom Agents](https://docs.github.com/ko/copilot/how-tos/use-copilot-agents/coding-agent/create-custom-agents)
+- [Custom Instructions](https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions)
+- [Custom Agents](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/create-custom-agents)
 
 ### Cursor
-- [Rules](https://cursor.com/ko/docs/context/rules)
-- [MCP](https://cursor.com/ko/docs/context/mcp)
-- [Skills](https://cursor.com/ko/docs/context/skills)
-- [Hooks](https://cursor.com/ko/docs/agent/hooks)
-- [Commands](https://cursor.com/ko/docs/agent/chat/commands)
-- [Subagents](https://cursor.com/ko/docs/agent/subagents)
+- [Rules](https://cursor.com/docs/context/rules)
+- [Subagents](https://cursor.com/docs/agent/subagents)
+
+### Codex CLI
+- [AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
+- [Skills](https://developers.openai.com/codex/skills)
 
 ---
 
