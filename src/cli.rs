@@ -17,12 +17,13 @@ detected LLM tool (Claude Code, Cursor, GitHub Copilot, etc.)."
 )]
 #[command(styles = get_styles())]
 #[command(after_help = "Examples:
-  aidot init                    Initialize a new preset repository
-  aidot repo add common <url>   Register a preset repository
-  aidot pull common             Apply preset to all detected tools
-  aidot pull common --tools cursor,claude,codex  Apply to specific tools only
-  aidot detect                  Show installed LLM tools
-  aidot status                  Show current configuration status")]
+  aidot init                              Initialize a new preset repository
+  aidot repo add common <url>             Register a preset repository
+  aidot pull common                       Apply preset to all detected tools
+  aidot pull common --tools cursor,claude Apply to specific tools only
+  aidot quick-pull https://github.com/u/preset  One-off apply without registering
+  aidot detect                            Show installed LLM tools
+  aidot status                            Show current configuration status")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -122,6 +123,33 @@ pub enum Commands {
         /// Include prerelease versions (beta, alpha, rc)
         #[arg(long)]
         prerelease: bool,
+    },
+
+    /// Pull and apply a preset once without registering the repository.
+    /// Accepts a Git URL or a local path only.
+    /// Alias: q-pull
+    #[command(name = "quick-pull", alias = "q-pull")]
+    QuickPull {
+        /// Git URL (https://, git@, …) or local path to the preset
+        #[arg(value_name = "SOURCE")]
+        source: String,
+
+        /// Apply to specific tools only (comma-separated).
+        /// Available: claude, cursor, copilot, codex
+        #[arg(long, value_delimiter = ',')]
+        tools: Option<Vec<String>>,
+
+        /// Preview changes without applying them
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force overwrite existing files without asking
+        #[arg(short, long, conflicts_with = "skip")]
+        force: bool,
+
+        /// Skip existing files without asking
+        #[arg(short, long, conflicts_with = "force")]
+        skip: bool,
     },
 }
 

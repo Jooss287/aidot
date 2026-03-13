@@ -93,8 +93,9 @@ cargo build --release
 | `aidot repo add <name> <url>` | 프리셋 저장소 등록 |
 | `aidot repo list` | 등록된 저장소 목록 |
 | `aidot repo remove <name>` | 저장소 제거 |
-| `aidot pull <name>` | 프리셋 적용 |
+| `aidot pull <name>` | 프리셋 적용 (등록된 저장소) |
 | `aidot pull --dry-run` | 변경 사항 미리보기 |
+| `aidot quick-pull <url>` | 저장소 등록 없이 1회성 프리셋 적용 (alias: `q-pull`) |
 | `aidot detect` | 설치된 LLM 도구 감지 |
 | `aidot status` | 현재 설정 상태 확인 |
 | `aidot diff <name>` | 프리셋과 현재 설정 비교 |
@@ -138,6 +139,33 @@ aidot pull team --dry-run
 # 기존 설정 덮어쓰기
 aidot pull team --force
 ```
+
+### 1회성 적용 (저장소 등록 없이)
+
+`quick-pull` (alias: `q-pull`)을 사용하면 저장소를 등록하지 않고 Git URL 또는
+로컬 경로에서 바로 프리셋을 적용할 수 있습니다. 프리셋을 처음 시험해 보거나
+1회성 설정이 필요할 때 유용합니다.
+
+```bash
+# Git URL에서 1회성 적용
+aidot quick-pull https://github.com/myteam/llm-config
+
+# 단축 alias 사용
+aidot q-pull https://github.com/myteam/llm-config
+
+# 특정 도구에만 적용
+aidot quick-pull https://github.com/myteam/llm-config --tools claude,cursor
+
+# 변경 사항 미리보기
+aidot quick-pull https://github.com/myteam/llm-config --dry-run
+
+# 로컬 경로에서 적용
+aidot quick-pull ./my-preset
+```
+
+> **어떤 걸 써야 할까?**
+> - `aidot pull <name>` — 팀/프로젝트에서 반복 적용할 프리셋 (한 번 등록, 여러 번 pull)
+> - `aidot quick-pull <url>` — 등록 없이 1회성으로 바로 적용할 때
 
 ### 프리셋 생성
 

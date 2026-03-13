@@ -145,6 +145,16 @@ fn run() -> Result<()> {
         Commands::Update { check, prerelease } => {
             commands::check_update(check, prerelease)?;
         }
+
+        Commands::QuickPull {
+            source,
+            tools,
+            dry_run,
+            force,
+            skip,
+        } => {
+            commands::quick_pull(source, tools, dry_run, force, skip)?;
+        }
     }
 
     Ok(())

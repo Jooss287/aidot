@@ -93,8 +93,9 @@ cargo build --release
 | `aidot repo add <name> <url>` | Register a preset repository |
 | `aidot repo list` | List registered repositories |
 | `aidot repo remove <name>` | Remove a repository |
-| `aidot pull <name>` | Apply a preset |
+| `aidot pull <name>` | Apply a preset (registered repository) |
 | `aidot pull --dry-run` | Preview changes |
+| `aidot quick-pull <url>` | One-off preset apply without registering (alias: `q-pull`) |
 | `aidot detect` | Detect installed LLM tools |
 | `aidot status` | Show current configuration status |
 | `aidot diff <name>` | Compare preset with current config |
@@ -138,6 +139,33 @@ aidot pull team --dry-run
 # Overwrite existing settings
 aidot pull team --force
 ```
+
+### One-Off Apply (without registering)
+
+Use `quick-pull` (alias: `q-pull`) to apply a preset from a Git URL or local
+path once, without registering it as a repository. Ideal for trying out a
+preset or one-time setups.
+
+```bash
+# One-off apply from a Git URL
+aidot quick-pull https://github.com/myteam/llm-config
+
+# Short alias
+aidot q-pull https://github.com/myteam/llm-config
+
+# Apply to specific tools only
+aidot quick-pull https://github.com/myteam/llm-config --tools claude,cursor
+
+# Preview changes without applying
+aidot quick-pull https://github.com/myteam/llm-config --dry-run
+
+# Apply from a local path
+aidot quick-pull ./my-preset
+```
+
+> **When to use which:**
+> - `aidot pull <name>` — for team/project presets you apply repeatedly (register once, pull often)
+> - `aidot quick-pull <url>` — for one-off or exploratory applies with no registration overhead
 
 ### Creating Presets
 
