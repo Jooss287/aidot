@@ -40,6 +40,26 @@ aidot repo add team https://github.com/myteam/llm-config
 aidot pull team
 ```
 
+### Use without installing (npx-style)
+
+Apply a preset once without installing aidot — everything is cleaned up automatically.
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.sh | bash -s -- https://github.com/myteam/llm-config
+
+# Apply to specific tools only
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.sh | bash -s -- https://github.com/myteam/llm-config --tools claude,cursor
+```
+
+```powershell
+# Windows (PowerShell)
+$env:AIDOT_RUN_ARGS="https://github.com/myteam/llm-config"; irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.ps1 | iex
+
+# Apply to specific tools only
+$env:AIDOT_RUN_ARGS="https://github.com/myteam/llm-config --tools claude,cursor"; irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.ps1 | iex
+```
+
 ---
 
 ## Installation

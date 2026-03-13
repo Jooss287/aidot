@@ -40,6 +40,26 @@ aidot repo add team https://github.com/myteam/llm-config
 aidot pull team
 ```
 
+### 설치 없이 바로 사용 (npx 스타일)
+
+aidot를 설치하지 않고 프리셋을 1회성으로 적용한 뒤 자동으로 정리합니다.
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.sh | bash -s -- https://github.com/myteam/llm-config
+
+# 특정 도구에만 적용
+curl -fsSL https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.sh | bash -s -- https://github.com/myteam/llm-config --tools claude,cursor
+```
+
+```powershell
+# Windows (PowerShell)
+$env:AIDOT_RUN_ARGS="https://github.com/myteam/llm-config"; irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.ps1 | iex
+
+# 특정 도구에만 적용
+$env:AIDOT_RUN_ARGS="https://github.com/myteam/llm-config --tools claude,cursor"; irm https://raw.githubusercontent.com/Jooss287/aidot/main/scripts/run.ps1 | iex
+```
+
 ---
 
 ## 설치
